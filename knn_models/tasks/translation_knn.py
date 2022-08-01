@@ -8,7 +8,10 @@ from fairseq.tasks import register_task
 from fairseq.dataclass import FairseqDataclass
 from knn_models.dataclass import KnnConfig
 from knn_models.hook_utils import ForwardHook
-from knn_models.knn_utils import KnnSearch, get_normalized_probs
+from knn_models.knn_utils import (
+    KnnSearch, 
+    get_normalized_probs,
+)
 
 
 @dataclass
