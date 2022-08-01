@@ -86,3 +86,31 @@ class KnnConfig(BaseKnnConfig):
             "help": "hyperparameter used for flattening the kNN probability distribution"
         }
     )
+
+
+@dataclass
+class AdaptiveKnnConfig(BaseKnnConfig):
+    num_neighbors: int = field(
+        default=1,
+        metadata={
+            "help": "the number of neighbors to retrieve"
+        }
+    )
+    temperature_value: float = field(
+        default=10,
+        metadata={
+            "help": "hyperparameter used for flattening the kNN probability distribution"
+        }
+    )
+    meta_k_hidden_size: int = field(
+        default=32,
+        metadata={
+            "help": "hidden size of meta-k network"
+        }
+    )
+    meta_k_dropout: float = field(
+        default=0.0,
+        metadata={
+            "help": "dropout of meta-k network"
+        }
+    )

@@ -4,8 +4,8 @@ from fairseq.tasks.translation import (
     TranslationTask,
     TranslationConfig,
 )
-from fairseq.dataclass import FairseqDataclass
 from fairseq.tasks import register_task
+from fairseq.dataclass import FairseqDataclass
 from knn_models.dataclass import KnnConfig
 from knn_models.hook_utils import ForwardHook
 from knn_models.knn_utils import KnnSearch, get_normalized_probs
@@ -38,9 +38,9 @@ class TranslationKnnTask(TranslationTask):
             f"{model.__class__.__name__}.{model.decoder.__class__.__name__} should " \
             "has the `layers` attribute."
         
-        # Collect outputs from the last layer of decoder as the datastore keys
+        # collect outputs from the last layer of decoder as the datastore keys
         model.decoder.layers[-1].register_forward_hook(self.forward_hook.forward_hook_function)
 
-        # Rewrite `get_normalized_probs` function to support kNN augmented NMT
+        # rewrite `get_normalized_probs` function to support kNN augmented NMT
         model.get_normalized_probs = partial(get_normalized_probs, self, model)
         return model

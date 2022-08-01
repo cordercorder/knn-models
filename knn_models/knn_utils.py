@@ -1,4 +1,5 @@
 import os
+import math
 import faiss
 import torch
 import logging
@@ -6,7 +7,10 @@ import numpy as np
 
 from torch import Tensor
 from fairseq import utils
-from knn_models.dataclass import KnnConfig
+from knn_models.dataclass import (
+    KnnConfig, 
+    AdaptiveKnnConfig,
+)
 from typing import Dict, List, Optional, Tuple
 
 
@@ -90,10 +94,118 @@ class KnnSearch:
         distance = torch.from_numpy(distance).to(queries.device)
         distance = distance.view(bsz, seq_len, -1)
 
-        distance = distance.neg_().div_(self.cfg.temperature_value)
+        distance.neg_().div_(self.cfg.temperature_value)
         distance = utils.softmax(distance, dim=-1)
 
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": self.cfg.lambda_value}
+
+
+class AdaptiveKnnSearch(KnnSearch):
+    def __init__(self, cfg: AdaptiveKnnConfig):
+        super().__init__(cfg)
+
+        self.value_count_mask = self.get_value_count_mask(self.cfg.num_neighbors)
+        self.distance_mask = self.get_distance_mask(self.cfg.num_neighbors)
+        self.reduced_k = self.distance_mask.size(0)
+
+        self.meta_k_network = None
+    
+    @staticmethod
+    def get_value_count_mask(length):
+        # 0 1 1
+        # 0 0 1
+        # 0 0 0
+        value_count_mask = torch.full([length, length], True, dtype=torch.bool)
+        value_count_mask.triu_(diagonal=1)
+        return value_count_mask
+    
+    @staticmethod
+    def get_distance_mask(length):
+        # 0 1 1
+        # 0 0 1
+        # 0 0 0
+        distance_mask = torch.full([length, length], True, dtype=torch.bool)
+        distance_mask.triu_(diagonal=1)
+
+        selected_index = []
+        idx = 1
+        for _ in range(int(math.log2(length)) + 1):
+            selected_index.append(idx - 1)
+            idx *= 2
+
+        return distance_mask[selected_index]
+    
+    def retrieve(self, queries):
+        bsz, seq_len = queries.size()[:2]
+        # B*T x C
+        queries = queries.contiguous().view(-1, queries.size(-1))
+
+        # B*T x K
+        distance, idx = self.index.search(queries.detach().cpu().float().numpy(), self.cfg.num_neighbors)
+
+        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
+        tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+
+        # distance and queries should have the same device
+        distance = torch.from_numpy(distance).to(queries.device)
+        distance = distance.view(bsz, seq_len, -1)
+
+        value_count = self.get_value_count(tgt_idx)
+        meta_k_network_input = torch.cat([distance, value_count.float()], dim=2)
+        del value_count
+
+        # in case of mix precision training
+        meta_k_network_input = meta_k_network_input.type_as(queries)
+
+        # B x T x (R_k+1)
+        p_meta = self.meta_k_network(meta_k_network_input)
+        p_meta = utils.softmax(p_meta, dim=2)
+        del meta_k_network_input
+
+        # B x T x 1
+        lambda_value = 1.0 - p_meta[: , :, :1]
+
+        # B x T x R_k
+        p_meta = p_meta[:, :, 1:]
+
+        distance.neg_().div_(self.cfg.temperature_value)
+
+        # B x T x R_k x k
+        distance = distance.unsqueeze_(2).expand(bsz, seq_len, self.reduced_k, self.cfg.num_neighbors)
+        self.distance_mask = self.distance_mask.to(distance.device)
+
+        distance = distance.masked_fill(self.distance_mask, float("-inf"))
+
+        distance = utils.softmax(distance, dim=-1)
+
+        # B x T x k
+        distance = p_meta.unsqueeze(2).matmul(distance).squeeze(2)
+                
+        return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": lambda_value}
+
+    def get_value_count(self, tgt_idx, relative_label_count=False):
+        bsz, seq_len, k = tgt_idx.size()
+
+        # B x T x k x k
+        tgt_idx = tgt_idx.unsqueeze(2).expand(bsz, seq_len, k, k)
+
+        self.value_count_mask = self.value_count_mask.to(tgt_idx.device)
+        tgt_idx = tgt_idx.masked_fill(self.value_count_mask, -1)
+
+        value_sorted = tgt_idx.sort(dim=3)[0]
+
+        value_sorted[:, :, :, 1:].mul_(
+            (value_sorted[:, :, :, 1:] - value_sorted[:, :, :, :-1]).ne_(0).long()
+        )
+
+        # B x T x k
+        value_count = value_sorted.ne_(0).long().sum(dim=3)
+        value_count[:, :, :-1].sub_(1)
+
+        if relative_label_count:
+            value_count[:, :, 1:] = value_count[:, :, 1:] - value_count[:, :, :-1]
+        
+        return value_count
 
 
 def get_normalized_probs(
