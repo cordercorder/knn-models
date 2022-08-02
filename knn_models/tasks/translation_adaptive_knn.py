@@ -57,7 +57,7 @@ class TranslationAdaptiveKnnTask(TranslationTask):
             "TranslationAdaptiveKnnTask only supports the model with decoder! " \
             f"There is no decoder in {model.__class__.__name__}."
 
-        # freeze the parameters in the pretrained model        
+        # freeze the parameters in the pretrained model
         for params in model.parameters():
             params.requires_grad = False
 
