@@ -1,4 +1,5 @@
 import os
+import re
 import math
 import faiss
 import torch
@@ -180,7 +181,7 @@ class AdaptiveKnnSearch(KnnSearch):
 
         # B x T x k
         distance = p_meta.unsqueeze(2).matmul(distance).squeeze(2)
-                
+
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": lambda_value}
 
     def get_value_count(self, tgt_idx, relative_label_count=False):
@@ -223,11 +224,12 @@ def get_normalized_probs(
             target = sample["target"]
         else:
             target = None
-        out = model.decoder.adaptive_softmax.get_log_prob(net_output[0], target=target)
-        return out.exp_() if not log_probs else out
-
-    mt_prob = net_output[0]
-
+        mt_prob = model.decoder.adaptive_softmax.get_log_prob(net_output[0], target=target)
+        mt_prob.exp_()
+    else:
+        mt_prob = net_output[0]
+        mt_prob = utils.softmax(mt_prob, dim=-1)
+    
     # T x B x C
     collected_keys = task.forward_hook.collected_outputs[0]
     task.forward_hook.clear()
@@ -238,7 +240,6 @@ def get_normalized_probs(
 
     lambda_value = search_results["lambda_value"]
 
-    mt_prob = utils.softmax(mt_prob, dim=-1)
     mt_prob.mul_(1.0 - lambda_value)
     mt_prob.scatter_add_(dim=2, index=search_results["tgt_idx"], src=search_results["knn_prob"].mul_(lambda_value))
 
@@ -246,3 +247,29 @@ def get_normalized_probs(
         mt_prob.log_()
 
     return mt_prob
+
+
+def get_captured_module(decoder, captured_module_name):
+    PATTERN = re.compile(r"(.*?)\[(-\d+)\]")
+
+    captured_module = decoder
+    logger.info(f"Captured module name: {captured_module_name}")
+
+    for attr in captured_module_name.split("."):
+        match_obj = PATTERN.fullmatch(attr)
+
+        if match_obj is None:
+            module_name = attr
+            idx = None
+        else:
+            module_name = match_obj.group(1)
+            idx = int(match_obj.group(2))
+
+        captured_module = getattr(captured_module, module_name)
+
+        if idx is not None:
+            captured_module = captured_module[idx]
+
+    logger.info(f"Captured module: {captured_module}")
+
+    return captured_module

@@ -16,7 +16,8 @@ from fairseq.dataclass import FairseqDataclass
 from knn_models.dataclass import AdaptiveKnnConfig
 from knn_models.hook_utils import ForwardHook
 from knn_models.knn_utils import (
-    AdaptiveKnnSearch, 
+    AdaptiveKnnSearch,
+    get_captured_module,
     get_normalized_probs,
 )
 
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TranslationAdaptiveKnnConfig(TranslationConfig):
-    """config for nearest neighbor machine translation"""
+    """config for adaptive nearest neighbor machine translation"""
     knn_config: AdaptiveKnnConfig = AdaptiveKnnConfig()
 
     reuse_dataloader: bool = field(
@@ -56,12 +57,6 @@ class TranslationAdaptiveKnnTask(TranslationTask):
             "TranslationAdaptiveKnnTask only supports the model with decoder! " \
             f"There is no decoder in {model.__class__.__name__}."
 
-        assert hasattr(model.decoder, "layers"), \
-            "Since TranslationAdaptiveKnnTask collects outputs from the last layer " \
-            "of decoder as the datastore keys by default, " \
-            f"{model.__class__.__name__}.{model.decoder.__class__.__name__} should " \
-            "has the `layers` attribute."
-
         # freeze the parameters in the pretrained model        
         for params in model.parameters():
             params.requires_grad = False
@@ -73,11 +68,13 @@ class TranslationAdaptiveKnnTask(TranslationTask):
         # make the meta-k network of the model and knn_search shared with each other
         self.knn_search.meta_k_network = meta_k_network
 
-        # rewrite `load_state_dict`function to successfully load the pretrained models when there are no meta-k networks in them
+        # rewrite `load_state_dict` function to successfully load the pretrained models when there are no meta-k networks in them
         model.load_state_dict = partial(load_state_dict, model)
 
-        # collect outputs from the last layer of decoder as the datastore keys
-        model.decoder.layers[-1].register_forward_hook(self.forward_hook.forward_hook_function)
+        # collect outputs from the specified module of decoder as the datastore keys
+        captured_module_name = self.cfg.knn_config.module_to_capture
+        captured_module = get_captured_module(model.decoder, captured_module_name)
+        captured_module.register_forward_hook(self.forward_hook.forward_hook_function)
 
         # rewrite `get_normalized_probs` function to support kNN augmented NMT
         model.get_normalized_probs = partial(get_normalized_probs, self, model)
