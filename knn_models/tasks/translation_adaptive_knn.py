@@ -71,7 +71,7 @@ class TranslationAdaptiveKnnTask(TranslationTask):
         # rewrite `load_state_dict` function to successfully load the pretrained models when there are no meta-k networks in them
         model.load_state_dict = partial(load_state_dict, model)
 
-        # collect outputs from the specified module of decoder as the datastore keys
+        # collect outputs from the specified module in decoder as the datastore keys
         captured_module_name = self.cfg.knn_config.module_to_capture
         captured_module = get_captured_module(model.decoder, captured_module_name)
         captured_module.register_forward_hook(self.forward_hook.forward_hook_function)
