@@ -20,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger("knn_models_cli.train_faiss_index")
 
 
-def _main(args: Namespace):
+def main(args: Namespace):
     if args.keys_type == "fp16":
         keys_dtype = np.float16
     else:
@@ -131,12 +131,12 @@ def validate_args(args: Namespace):
         assert args.gpu, "knn_fp16 can only be performed on GPU"
 
 
-def main():
+def cli_main():
     parser = get_parser()
     args = parser.parse_args()
     validate_args(args)
-    _main(args)
+    main(args)
 
 
 if __name__ == "__main__":
-    main()
+    cli_main()
