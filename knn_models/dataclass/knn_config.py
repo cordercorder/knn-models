@@ -44,7 +44,7 @@ class BaseKnnConfig(FairseqDataclass):
             "help": "the number of clusters to query"
         }
     )
-    device_id: int = field(
+    knn_device_id: int = field(
         default=0,
         metadata={
             "help": "ID of GPU device used for (approximate) knn search. "
@@ -69,6 +69,14 @@ class BaseKnnConfig(FairseqDataclass):
         metadata={
             "help": "the outputs of the which module in decoder to be captured. "
             "the default module is the last layer of decoder"
+        }
+    )
+    saving_mode: bool = field(
+        default=False,
+        metadata={
+            "help": "whether to use saving mode. "
+            "the knn search setup process will be skipped in saving mode. "
+            "saving mode is usually used when saving datastore"
         }
     )
 

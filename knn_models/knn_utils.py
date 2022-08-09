@@ -21,15 +21,17 @@ logger = logging.getLogger(__name__)
 class KnnSearch:
     def __init__(self, cfg: KnnConfig):
         self.cfg = cfg
-        self.setup_knn_search()
+
+        if not cfg.saving_mode:
+            self.setup_knn_search()
 
     def setup_knn_search(self):
         index_path = os.path.join(self.cfg.datastore, "faiss.index")
         index = faiss.read_index(index_path, faiss.IO_FLAG_MMAP | faiss.IO_FLAG_READ_ONLY)
 
-        if self.cfg.device_id >= 0:
+        if self.cfg.knn_device_id >= 0:
             
-            logger.info(f"Putting index to GPU {self.cfg.device_id}")
+            logger.info(f"Moving index to GPU {self.cfg.knn_device_id}")
 
             resource = faiss.StandardGpuResources()
             cloner_options = None
@@ -37,7 +39,7 @@ class KnnSearch:
                 cloner_options = faiss.GpuClonerOptions()
                 cloner_options.useFloat16 = True
             
-            index = faiss.index_cpu_to_gpu(provider=resource, device=self.cfg.device_id, index=index, options=cloner_options)
+            index = faiss.index_cpu_to_gpu(provider=resource, device=self.cfg.knn_device_id, index=index, options=cloner_options)
         
         logger.info(f"Setting nprobe of index to {self.cfg.nprobe}")
         index.nprobe = self.cfg.nprobe

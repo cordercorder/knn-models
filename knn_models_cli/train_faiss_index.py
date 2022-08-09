@@ -50,7 +50,7 @@ def main(args: Namespace):
         index = faiss.IndexIVFPQ(quantizer, args.keys_dimension, args.ncentroids, args.code_size, args.nbit_per_idx)
         index.nprobe = args.nprobe
 
-        if args.gpu:
+        if args.use_gpu:
             logger.info("Move index to gpu before training")
             index = faiss.index_cpu_to_gpu(provider=resource, device=0, index=index, options=cloner_options)
 
@@ -73,7 +73,7 @@ def main(args: Namespace):
         del trained_keys
         
         logger.info(f"Writing the trained faiss index to {trained_index_path}")
-        if args.gpu:
+        if args.use_gpu:
             faiss.write_index(faiss.index_gpu_to_cpu(index), trained_index_path)
         else:
             faiss.write_index(index, trained_index_path)
@@ -81,14 +81,14 @@ def main(args: Namespace):
     if index is None:
         index = faiss.read_index(trained_index_path)
 
-        if args.gpu:
+        if args.use_gpu:
             index = faiss.index_cpu_to_gpu(provider=resource, device=0, index=index, options=cloner_options)
     
     logger.info("Staring adding keys to the trained faiss index")
     current_idx = 0
     while current_idx < datastore_keys.shape[0]:
         start_idx = current_idx
-        end_idx = min(current_idx + args.batch_size, datastore_keys.shape[0])
+        end_idx = min(start_idx + args.batch_size, datastore_keys.shape[0])
         index.add_with_ids(datastore_keys[start_idx: end_idx].astype(np.float32), np.arange(start_idx, end_idx))
         current_idx = end_idx
 
@@ -96,7 +96,7 @@ def main(args: Namespace):
 
     final_index_path = os.path.join(args.datastore, "faiss.index")
     logger.info(f"Writing the final faiss index to {final_index_path}")
-    if args.gpu:
+    if args.use_gpu:
         faiss.write_index(faiss.index_gpu_to_cpu(index), final_index_path)
     else:
         faiss.write_index(index, final_index_path)
@@ -105,7 +105,7 @@ def main(args: Namespace):
 def get_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--gpu", action="store_true", default=False, help="whether to use GPU to train the faiss index")
+    parser.add_argument("--use-gpu", action="store_true", default=False, help="whether to use GPU to train the faiss index")
 
     parser.add_argument("--seed", type=int, default=1, help="random seed for sampling the subset of keys to train the faiss index")
 
@@ -128,7 +128,7 @@ def get_parser():
 
 def validate_args(args: Namespace):
     if args.knn_fp16:
-        assert args.gpu, "knn_fp16 can only be performed on GPU"
+        assert args.use_gpu, "knn_fp16 can only be performed on GPU"
 
 
 def cli_main():

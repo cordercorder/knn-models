@@ -19,7 +19,7 @@ logging.basicConfig(
 )
 
 
-logger = logging.getLogger("knn_models_cli.tune_params")
+logger = logging.getLogger("knn_models_cli.tune_knn_params")
 
 
 def remove_duplicated_params(candidate_params: List[Tuple[int]]):

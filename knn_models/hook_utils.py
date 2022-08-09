@@ -1,5 +1,5 @@
 class ForwardHook:
-    """Hook for collecting the final output of TransformerDecoderLayer"""
+    """Hook for collecting the output of specified module in TransformerDecoder"""
     def __init__(self):
         self.collected_outputs = []
     
