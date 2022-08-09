@@ -29,17 +29,37 @@ class KnnSearch:
         index_path = os.path.join(self.cfg.datastore, "faiss.index")
         index = faiss.read_index(index_path, faiss.IO_FLAG_MMAP | faiss.IO_FLAG_READ_ONLY)
 
-        if self.cfg.knn_device_id >= 0:
-            
+        if min(self.cfg.knn_device_id) >= 0:
             logger.info(f"Moving index to GPU {self.cfg.knn_device_id}")
 
-            resource = faiss.StandardGpuResources()
-            cloner_options = None
-            if self.cfg.knn_fp16:
-                cloner_options = faiss.GpuClonerOptions()
-                cloner_options.useFloat16 = True
-            
-            index = faiss.index_cpu_to_gpu(provider=resource, device=self.cfg.knn_device_id, index=index, options=cloner_options)
+            if len(self.cfg.knn_device_id) == 1:
+                resource = faiss.StandardGpuResources()
+                cloner_options = None
+                if self.cfg.knn_fp16:
+                    cloner_options = faiss.GpuClonerOptions()
+                    cloner_options.useFloat16 = True
+                
+                index = faiss.index_cpu_to_gpu(provider=resource, device=self.cfg.knn_device_id, index=index, options=cloner_options)
+            else:
+                # when multiple GPU devices are specified, shard the index across GPUs
+                gpu_resources = [faiss.StandardGpuResources() for _ in range(len(self.cfg.knn_device_id))]
+                
+                resource_vector = faiss.GpuResourcesVector()
+                device_vector = faiss.IntVector()
+                for i, idx in enumerate(self.cfg.knn_device_id):
+                    resource_vector.push_back(gpu_resources[i])
+                    device_vector.push_back(idx)
+                
+                cloner_options = faiss.GpuMultipleClonerOptions()
+                cloner_options.shard = True
+
+                if self.cfg.knn_fp16:
+                    cloner_options.useFloat16 = True
+
+                index = faiss.index_cpu_to_gpu_multiple(provider=resource_vector, devices=device_vector, index=index, options=cloner_options)
+
+        else:
+            assert len(self.cfg.knn_device_id) == 1, "Only one device can be used when perform kNN search on CPU"
         
         logger.info(f"Setting nprobe of index to {self.cfg.nprobe}")
         index.nprobe = self.cfg.nprobe
@@ -88,7 +108,7 @@ class KnnSearch:
         queries = queries.contiguous().view(-1, queries.size(-1))
 
         # B*T x K
-        distance, idx = self.index.search(queries.detach().cpu().float().numpy(), self.cfg.num_neighbors)
+        distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
 
         tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
         tgt_idx = tgt_idx.view(bsz, seq_len, -1)
@@ -144,7 +164,7 @@ class AdaptiveKnnSearch(KnnSearch):
         queries = queries.contiguous().view(-1, queries.size(-1))
 
         # B*T x K
-        distance, idx = self.index.search(queries.detach().cpu().float().numpy(), self.cfg.num_neighbors)
+        distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
 
         tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
         tgt_idx = tgt_idx.view(bsz, seq_len, -1)

@@ -1,3 +1,4 @@
+from typing import List
 from omegaconf import MISSING
 from dataclasses import dataclass, field
 from fairseq.dataclass import FairseqDataclass, ChoiceEnum
@@ -44,12 +45,15 @@ class BaseKnnConfig(FairseqDataclass):
             "help": "the number of clusters to query"
         }
     )
-    knn_device_id: int = field(
-        default=0,
+    knn_device_id: List[int] = field(
+        default_factory=lambda: [0],
         metadata={
             "help": "ID of GPU device used for (approximate) knn search. "
-            "a negtive number means using CPU instead of GPU. "
+            "a single negtive number means using CPU instead of GPU. "
             "note that this device can be different from the one used for translation."
+            "if there is more than one number in `knn_device_id`, all numbers must "
+            "be greater or equal to zero and the faiss index will be sharded across "
+            "the GPU devices specified by `knn_device_id`"
         }
     )
     knn_fp16: bool = field(
