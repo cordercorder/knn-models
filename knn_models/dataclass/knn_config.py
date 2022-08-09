@@ -39,6 +39,12 @@ class BaseKnnConfig(FairseqDataclass):
             "help": "whether to load datastore keys"
         }
     )
+    load_value_weights: bool = field(
+        default=False,
+        metadata={
+            "help": "whether to load the weights of datastore values"
+        }
+    )
     nprobe: int = field(
         default=32,
         metadata={
@@ -53,7 +59,8 @@ class BaseKnnConfig(FairseqDataclass):
             "note that this device can be different from the one used for translation."
             "if there is more than one number in `knn_device_id`, all numbers must "
             "be greater or equal to zero and the faiss index will be sharded across "
-            "the GPU devices specified by `knn_device_id`"
+            "the GPU devices specified by `knn_device_id`. "
+            "eg., --knn-device-id '1,2,3' "
         }
     )
     knn_fp16: bool = field(

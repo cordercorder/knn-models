@@ -116,7 +116,7 @@ def greedy_merge_pruning(
         log_interval
     )
 
-    pruned_datastore_weight = np.ones((datastore_size, ), dtype=np.int64)
+    datastore_weight = np.ones((datastore_size, ), dtype=np.int64)
 
     datastore_knn_idx_path = os.path.join(datastore, "datastore_knn_idx.npy")
     datastore_knn_idx = np.memmap(
@@ -139,14 +139,14 @@ def greedy_merge_pruning(
     for i in rng.permutation(datastore_size):
         for neighbor_idx in datastore_knn_idx[i]:
             if neighbor_idx != i and \
-                pruned_datastore_weight[neighbor_idx] == 1 and \
+                datastore_weight[neighbor_idx] == 1 and \
                     datastore_values[i] == datastore_values[neighbor_idx]:
                 
-                pruned_datastore_weight[neighbor_idx] = 0
-                pruned_datastore_weight[i] += 1
+                datastore_weight[neighbor_idx] = 0
+                datastore_weight[i] += 1
     
-    effective_datastore_weight = pruned_datastore_weight > 0
-    pruned_datastore_size = effective_datastore_weight.sum()
+    pruned_datastore_weight_mask = datastore_weight > 0
+    pruned_datastore_size = pruned_datastore_weight_mask.sum()
 
     logger.info(f"Pruned datastore size: {pruned_datastore_size}")
     
@@ -166,11 +166,22 @@ def greedy_merge_pruning(
         shape=(pruned_datastore_size, )
     )
 
-    pruned_datastore_keys[:] = datastore_keys[np.nonzero(effective_datastore_weight)]
-    pruned_datastore_values[:] = datastore_values[np.nonzero(effective_datastore_weight)]
+    pruned_datastore_weight_path = os.path.join(pruned_datastore, "weight.npy")
+    pruned_datastore_weight = np.memmap(
+        pruned_datastore_weight_path,
+        dtype=np.float32,
+        mode="w+",
+        shape=(pruned_datastore_size, )
+    )
+
+    pruned_datastore_weight_indices = np.nonzero(pruned_datastore_weight_mask)
+    pruned_datastore_keys[:] = datastore_keys[pruned_datastore_weight_indices]
+    pruned_datastore_values[:] = datastore_values[pruned_datastore_weight_indices]
+    pruned_datastore_weight[:] = datastore_weight[pruned_datastore_weight_indices].astype(np.float32)
     
     pruned_datastore_keys.flush()
     pruned_datastore_values.flush()
+    pruned_datastore_weight.flush()
 
     logger.info("Greedy merge pruning complete")
 

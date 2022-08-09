@@ -39,9 +39,15 @@ class KnnSearch:
                     cloner_options = faiss.GpuClonerOptions()
                     cloner_options.useFloat16 = True
                 
-                index = faiss.index_cpu_to_gpu(provider=resource, device=self.cfg.knn_device_id, index=index, options=cloner_options)
+                index = faiss.index_cpu_to_gpu(
+                    provider=resource, 
+                    device=self.cfg.knn_device_id[0], 
+                    index=index, 
+                    options=cloner_options
+                )
             else:
                 # when multiple GPU devices are specified, shard the index across GPUs
+                # this can be useful if the datastore is too large to fit into one GPU device
                 gpu_resources = [faiss.StandardGpuResources() for _ in range(len(self.cfg.knn_device_id))]
                 
                 resource_vector = faiss.GpuResourcesVector()
@@ -56,7 +62,12 @@ class KnnSearch:
                 if self.cfg.knn_fp16:
                     cloner_options.useFloat16 = True
 
-                index = faiss.index_cpu_to_gpu_multiple(provider=resource_vector, devices=device_vector, index=index, options=cloner_options)
+                index = faiss.index_cpu_to_gpu_multiple(
+                    provider=resource_vector, 
+                    devices=device_vector, 
+                    index=index, 
+                    options=cloner_options
+                )
 
         else:
             assert len(self.cfg.knn_device_id) == 1, "Only one device can be used when perform kNN search on CPU"
@@ -84,23 +95,40 @@ class KnnSearch:
                 shape=(self.cfg.datastore_size, self.cfg.keys_dimension)
             )
         
+        if self.cfg.load_value_weights:
+            datastore_value_weights_path = os.path.join(self.cfg.datastore, "weight.npy")
+            logger.info(f"Loading the weight of datastore values from {datastore_value_weights_path}")
+            datastore_value_weights = np.memmap(
+                datastore_value_weights_path,
+                dtype=np.float32,
+                mode="r",
+                shape=(self.cfg.datastore_size, )
+            )
+            
         if self.cfg.move_to_memory:
             logger.info("Moving datastore values into CPU memory")
             _datastore_values = np.empty((self.cfg.datastore_size, ), dtype=np.int64)
-            _datastore_values[:] = datastore_values[:]
+            _datastore_values[:] = datastore_values
             datastore_values = _datastore_values
 
             if self.cfg.load_keys:
                 logger.info("Moving datastore keys into CPU memory")
                 _datastore_keys = np.empty((self.cfg.datastore_size, self.cfg.keys_dimension), dtype=keys_dtype)
-                _datastore_keys[:] = datastore_keys[:]
+                _datastore_keys[:] = datastore_keys
                 datastore_keys = _datastore_keys
+            
+            if self.cfg.load_value_weights:
+                logger.info("Moving the weight of datastore values into CPU memory")
+                _datastore_value_weights = np.empty((self.cfg.datastore_size, ), dtype=np.float32)
+                _datastore_value_weights[:] = datastore_value_weights
+                datastore_value_weights = _datastore_value_weights
         
         self.index = index
         self.datastore_values = datastore_values
 
-        if self.cfg.load_keys:
-            self.datastore_keys = datastore_keys
+        self.datastore_keys = datastore_keys if self.cfg.load_keys else None
+        
+        self.datastore_value_weights = datastore_value_weights if self.cfg.load_value_weights else None
 
     def retrieve(self, queries):
         bsz, seq_len = queries.size()[:2]
@@ -117,7 +145,16 @@ class KnnSearch:
         distance = torch.from_numpy(distance).to(queries.device)
         distance = distance.view(bsz, seq_len, -1)
 
-        distance.neg_().div_(self.cfg.temperature_value)
+        distance.neg_()
+
+        if self.datastore_value_weights is not None:
+            weight = torch.from_numpy(self.datastore_value_weights[idx]).to(queries.device)
+            weight = weight.view(bsz, seq_len, -1)
+            # following the original implementation in `Efficient Nearest Neighbor Language Models`
+            distance.add_(weight.log_())
+        
+        distance.div_(self.cfg.temperature_value)
+        
         distance = utils.softmax(distance, dim=-1)
 
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": self.cfg.lambda_value}
