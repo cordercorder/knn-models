@@ -22,7 +22,7 @@ logging.basicConfig(
         level=os.environ.get("LOGLEVEL", "INFO").upper(),
         stream=sys.stdout,
     )
-logger = logging.getLogger("knn_models_cli.save_datastore")
+logger = logging.getLogger("knn_models_cli.generate_datastore")
 
 
 def get_symbols_to_strip_from_output(generator):
