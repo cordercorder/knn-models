@@ -26,7 +26,8 @@ def get_parser():
     parser.add_argument("--seed", type=int, default=1, 
                         help="random seed")
 
-    parser.add_argument("--method", type=str, choices=["random_pruning", "greedy_merge"], required=True)
+    parser.add_argument("--method", type=str, choices=["random_pruning", "greedy_merge"], required=True, 
+                        help="method used for datastore pruning")
 
     parser.add_argument("--datastore", required=True, type=str, 
                         help="path to datastore directory")
@@ -95,8 +96,9 @@ def cli_main():
         )
 
     elif args.method == "random_pruning":
-        assert args.pruned_datastore_size <= args.datastore_size, \
-            "datastore size after pruning can not be greater than current datastore size"
+        # validate args
+        assert args.pruned_datastore_size < args.datastore_size, \
+            "datastore size after pruning should be small than original datastore size"
 
         random_pruning(
             args.datastore,

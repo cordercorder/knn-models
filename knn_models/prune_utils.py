@@ -134,6 +134,7 @@ def greedy_merge_pruning(
         shape=(datastore_size, )
     )
 
+    logger.info("Start merging datastore keys")
     rng = np.random.default_rng(seed)
 
     for i in rng.permutation(datastore_size):
@@ -148,7 +149,7 @@ def greedy_merge_pruning(
     pruned_datastore_weight_mask = datastore_weight > 0
     pruned_datastore_size = pruned_datastore_weight_mask.sum()
 
-    logger.info(f"Pruned datastore size: {pruned_datastore_size}")
+    logger.info(f"Merging datastore keys complete. Pruned datastore size: {pruned_datastore_size}")
     
     pruned_datastore_keys_path = os.path.join(pruned_datastore, "keys.npy")
     pruned_datastore_keys = np.memmap(
@@ -175,6 +176,8 @@ def greedy_merge_pruning(
     )
 
     pruned_datastore_weight_indices = np.nonzero(pruned_datastore_weight_mask)
+
+    logger.info("Start writing the pruned datastore into disk")
     pruned_datastore_keys[:] = datastore_keys[pruned_datastore_weight_indices]
     pruned_datastore_values[:] = datastore_values[pruned_datastore_weight_indices]
     pruned_datastore_weight[:] = datastore_weight[pruned_datastore_weight_indices].astype(np.float32)
@@ -212,11 +215,12 @@ def random_pruning(
         shape=(datastore_size, )
     )
 
+    logger.info("Start sampling indices")
     rng = np.random.default_rng(seed)
     sampeled_indices = rng.choice(np.arange(datastore_keys.shape[0]), size=pruned_datastore_size, replace=False)
     sampeled_indices = np.sort(sampeled_indices)
 
-    logger.info(f"Pruned datastore size: {pruned_datastore_size}")
+    logger.info(f"Sampling indices complete. Pruned datastore size: {pruned_datastore_size}")
 
     pruned_datastore_keys_path = os.path.join(pruned_datastore, "keys.npy")
     pruned_datastore_keys = np.memmap(
@@ -234,6 +238,7 @@ def random_pruning(
         shape=(pruned_datastore_size, )
     )
 
+    logger.info("Start writing the pruned datastore into disk")
     pruned_datastore_keys[:] = datastore_keys[sampeled_indices]
     pruned_datastore_values[:] = datastore_values[sampeled_indices]
 
