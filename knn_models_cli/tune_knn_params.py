@@ -173,7 +173,7 @@ def main(args: Namespace):
                     }
                 )
 
-    results.sort(key=lambda item: item["bleu_score"], reverse=True)
+    results.sort(key=lambda item: item["bleu_score"])
     for elem in results:
         logger.info(elem)
 

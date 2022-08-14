@@ -5,7 +5,7 @@ import torch.nn as nn
 from typing import Optional
 from functools import partial
 from argparse import Namespace
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from omegaconf import DictConfig
 from fairseq.tasks.translation import (
     TranslationTask,
@@ -29,17 +29,6 @@ logger = logging.getLogger(__name__)
 class TranslationAdaptiveKnnConfig(TranslationConfig):
     """config for adaptive nearest neighbor machine translation"""
     knn_config: AdaptiveKnnConfig = AdaptiveKnnConfig()
-
-    reuse_dataloader: bool = field(
-        default=False,
-        metadata={
-            "help": "whether to reuse dataloader or not. "
-            "As the training dataset and validation dataset may be the same dataset "
-            "in TranslationAdaptiveKnnTask. If the dataloader is reused between the "
-            "training dataset and validation dataset, the dataloader is shared between "
-            "them in fairseq-0.12.2, which can cause some negtive effect."
-        }
-    )
 
 
 @register_task("translation_adaptive_knn", dataclass=TranslationAdaptiveKnnConfig)
