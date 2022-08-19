@@ -15,13 +15,13 @@ class DimReduceConfig(FairseqDataclass):
             "help": "the method used for dimension reduction"
         }
     )
-    pca_input_dim: int = field(
+    pca_input_size: int = field(
         default=0, 
         metadata={
             "help": "input dimension of PCA"
         }
     )
-    pca_output_dim: int = II("task.knn_config.keys_dimension")
+    pca_output_size: int = II("task.knn_config.keys_dimension")
     datastore: str = II("task.knn_config.datastore")
     transform_ckpt_name: str = field(
         default="transform.pt",

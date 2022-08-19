@@ -98,7 +98,7 @@ def cli_main():
     elif args.method == "random_pruning":
         # validate args
         assert args.pruned_datastore_size < args.datastore_size, \
-            "datastore size after pruning should be small than original datastore size"
+            "datastore size after pruning should be smaller than original datastore size"
 
         random_pruning(
             args.datastore,

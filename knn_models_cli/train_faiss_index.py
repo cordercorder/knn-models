@@ -106,6 +106,7 @@ def get_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--use-gpu", action="store_true", default=False, help="whether to use GPU to train the faiss index")
+    parser.add_argument("--knn-fp16", action="store_true", default=False, help="whether to perform intermediate calculations in float16")
 
     parser.add_argument("--seed", type=int, default=1, help="random seed for sampling the subset of keys to train the faiss index")
 
@@ -122,7 +123,6 @@ def get_parser():
 
     parser.add_argument("--batch-size", default=500000, type=int, help="number of keys to add to the faiss index once time")
     parser.add_argument("--num-trained-keys", default=math.inf, type=int, help="maximum number of keys used for training the faiss index")
-    parser.add_argument("--knn-fp16", action="store_true", default=False, help="whether to perform intermediate calculations in float16")
     return parser
 
 
