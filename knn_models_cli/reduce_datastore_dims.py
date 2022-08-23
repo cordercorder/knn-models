@@ -6,6 +6,7 @@ import argparse
 
 from knn_models.dim_reduce_utils import (
     train_pckmt,
+    apply_pckmt,
     pca_dimension_reduction,
 )
 
@@ -55,6 +56,14 @@ def get_parser():
                             help="`train_pckmt`: train compact network. "
                             "`apply_pckmt`: use the trained compact network for dimension reduction")
         
+        parser.add_argument("--batch-size", type=int, default=1024, 
+                            help="number of keys in one batch")
+        
+        parser.add_argument("--log-interval", type=int, default=100, 
+                            help="print the training progress every `log_interval` updates "
+                            "in case of `train_pckmt`. print the progress every `log_interval` "
+                            "batch in case of `apply_pckmt`")
+        
         args, unknown = parser.parse_known_args()
 
         if args.stage == "train_pckmt":
@@ -68,11 +77,6 @@ def get_parser():
             parser.add_argument("--vocab-size", type=int ,required=True, 
                                 help="number of unique tokens in the vocabulary")
             
-            parser.add_argument("--log-interval", type=int, default=100, 
-                                help="print the training progress every `log_interval` updates")
-            
-            parser.add_argument("--batch-size", type=int, default=1024, 
-                                help="number of keys in one batch")
             parser.add_argument("--num-workers", type=int, default=1, 
                                 help="number of subprocess used for data loading")
 
@@ -91,8 +95,10 @@ def get_parser():
                                 help="weight decay")
             parser.add_argument("--clip-norm", type=float, default=0.0, 
                                 help="clip threshold of gradients")
+            parser.add_argument("--label-smoothing", type=float, default=2e-3, 
+                                help="epsilon for label smoothing, 0 means no label smoothing")
 
-            parser.add_argument("--dbscan-eps", type=float, default=10, 
+            parser.add_argument("--dbscan-eps", type=float, default=10.0, 
                                 help="the maximum distance between two samples for one to be "
                                 "considered as in the neighborhood of the other in DBSCAN")
             parser.add_argument("--dbscan-min-samples", type=int, default=4, 
@@ -100,6 +106,12 @@ def get_parser():
                                 "for a point to be considered as a core point in DBSCAN")
             parser.add_argument("--dbscan-max-samples", type=int, default=100000, 
                                 help="maximum number of samples to train DBSCAN")
+        
+        elif args.stage == "apply_pckmt":
+            parser.add_argument("--checkpoint-name", type=str, required=True, 
+                                help="file name of checkpoint")
+        else:
+            raise ValueError("Unknown stage")
     return parser
 
 
@@ -143,12 +155,28 @@ def cli_main():
                 args.betas,
                 args.weight_decay,
                 args.clip_norm,
+                args.label_smoothing,
                 args.dbscan_eps,
                 args.dbscan_min_samples,
                 args.dbscan_max_samples,
                 args.seed,
                 args.transformed_datastore,
             )
+        elif args.stage == "apply_pckmt":
+            apply_pckmt(
+                args.datastore,
+                args.datastore_size,
+                args.keys_dimension,
+                args.keys_dtype,
+                args.reduced_keys_dimension,
+                args.compact_net_hidden_size,
+                args.batch_size,
+                args.log_interval,
+                args.checkpoint_name,
+                args.transformed_datastore
+            )
+        else:
+            raise ValueError("Unknown stage")
 
 
 if __name__ == "__main__":

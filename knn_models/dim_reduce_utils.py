@@ -33,7 +33,7 @@ class CompactNet(nn.Module):
         compact_net_input_size, 
         compact_net_hidden_size,
         compact_net_output_size, 
-        compact_net_dropout,
+        compact_net_dropout=0.0,
         **kwargs
     ):
         super().__init__()
@@ -145,6 +145,7 @@ def train_pckmt(
     betas,
     weight_decay,
     clip_norm,
+    label_smoothing,
     dbscan_eps,
     dbscan_min_samples,
     dbscan_max_samples,
@@ -210,6 +211,8 @@ def train_pckmt(
     accumulated_bsz = 0
     should_stop = False
 
+    checkpoints_info = []
+
     max_update = max_update or math.inf
 
     target = torch.arange(0, batch_size, device="cuda")
@@ -219,6 +222,10 @@ def train_pckmt(
             break
 
         train_dataset.set_epoch_and_rng(epoch)
+
+        loss_per_epoch = 0.0
+        n_correct_per_epoch = 0
+        bsz_per_epoch = 0
 
         for i, sample in enumerate(train_dataloader):
             if should_stop:
@@ -264,12 +271,29 @@ def train_pckmt(
             logits = torch.cat([positive_logits, negative_logits], dim=1)
             del positive_logits, negative_logits
             
-            loss = F.cross_entropy(logits, target[: bsz])
+            with torch.no_grad():
+                predict = logits.argmax(1)
+            
+            n_correct = (predict == target[: bsz]).sum().item()
+            del predict
+
+            n_correct_per_epoch += n_correct
+
+            loss = F.cross_entropy(
+                input=logits, 
+                target=target[: bsz], 
+                reduction="sum", 
+                label_smoothing=label_smoothing
+            )
+
             del logits
 
             loss.backward()
 
             accumulated_bsz += bsz
+
+            loss_per_epoch += loss.item()
+            bsz_per_epoch += bsz
 
             if (i + 1) % update_freq == 0:
                 optimizer_step()
@@ -278,8 +302,9 @@ def train_pckmt(
 
                 if num_updates % log_interval == 0:
                     logger.info(
-                        f"update steps: {num_updates}, "
-                        f"loss: {loss.item()}"
+                        f"Epoch {epoch}, update steps: {num_updates}, "
+                        f"loss: {loss_per_epoch / bsz_per_epoch: .5f}, "
+                        f"acc: {n_correct_per_epoch / bsz_per_epoch: .5f}"
                     )
 
                 if num_updates >= max_update:
@@ -292,16 +317,108 @@ def train_pckmt(
         
             if num_updates >= max_update:
                 should_stop = True
-
-        logger.info(f"Epoch {epoch} complete")
+        
+        epoch_loss = loss_per_epoch / bsz_per_epoch
+        epoch_acc = n_correct_per_epoch / bsz_per_epoch
+        logger.info(f"Epoch loss: {epoch_loss: .5f}, Epoch acc: {epoch_acc: .5f}")
 
         checkpoint_name = f"checkpoint{epoch}.pt"
         checkpoint_path = os.path.join(transformed_datastore, checkpoint_name)
         torch.save(compact_net.state_dict(), checkpoint_path)
-
         logger.info(f"Saving {checkpoint_name} complete")
+
+        checkpoints_info.append((checkpoint_name, epoch_loss))
     
     if should_stop:
         checkpoint_name = "checkpoint_last.pt"
         checkpoint_path = os.path.join(transformed_datastore, checkpoint_name)
         torch.save(compact_net.state_dict(), checkpoint_path)
+        logger.info(f"Saving {checkpoint_name} complete")
+
+        checkpoints_info.append((checkpoint_name, loss_per_epoch / bsz_per_epoch))
+
+    logger.info("Training PCKMT complete")
+
+    checkpoints_info.sort(key=lambda item: item[1], reverse=True)
+    logger.info("Loss of all checkpoints")
+
+    for checkpoint_name, loss in checkpoints_info:
+        logger.info(f"Checkpoint: {checkpoint_name}, loss: {loss: .5f}")
+
+
+def apply_pckmt(
+    datastore,
+    datastore_size,
+    keys_dimension,
+    keys_dtype,
+    reduced_keys_dimension,
+    compact_net_hidden_size,
+    batch_size,
+    log_interval,
+    checkpoint_name,
+    transformed_datastore,
+):
+    datastore_keys_path = os.path.join(datastore, "keys.npy")
+    logger.info(f"Loading {datastore_size} datastore keys from {datastore_keys_path}")
+    keys_dtype = np.float32 if keys_dtype == "fp32" else np.float16
+    datastore_keys = np.memmap(
+        datastore_keys_path, 
+        dtype=keys_dtype, 
+        mode="r", 
+        shape=(datastore_size, keys_dimension)
+    )
+
+    reduced_datastore_keys_path = os.path.join(transformed_datastore, "keys.npy")
+    logger.info(f"Create reduced datastore keys in {reduced_datastore_keys_path}")
+    recuced_datastore_keys = np.memmap(
+        reduced_datastore_keys_path,
+        dtype=keys_dtype,
+        mode="w+",
+        shape=(datastore_size, reduced_keys_dimension)
+    )
+
+    compact_net = CompactNet(
+        compact_net_input_size=keys_dimension,
+        compact_net_hidden_size=compact_net_hidden_size,
+        compact_net_output_size=reduced_keys_dimension,
+    )
+
+    checkpoint_path = os.path.join(transformed_datastore, checkpoint_name)
+    compact_net.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
+
+    logger.info(compact_net)
+
+    use_cuda = torch.cuda.is_available()
+    
+    if use_cuda:
+        compact_net = compact_net.cuda()
+    
+    compact_net.eval()
+    
+    num_batches = datastore_keys.shape[0] // batch_size + \
+        int(datastore_keys.shape[0] % batch_size != 0)
+
+    current_idx = 0
+    for i in range(num_batches):
+        start_idx = current_idx
+        end_idx = min(start_idx + batch_size, datastore_keys.shape[0])
+
+        sample_keys = datastore_keys[start_idx: end_idx].astype(np.float32)
+        sample_keys = torch.from_numpy(sample_keys)
+
+        if use_cuda:
+            sample_keys = sample_keys.cuda()
+
+        with torch.no_grad():
+            reduced_sample_keys = compact_net(sample_keys)
+            del sample_keys
+        
+        reduced_sample_keys = reduced_sample_keys.cpu().numpy().astype(keys_dtype)
+        recuced_datastore_keys[start_idx: end_idx] = reduced_sample_keys
+
+        current_idx = end_idx
+    
+        if (i + 1) % log_interval == 0:
+            logger.info(f"{i + 1} / {num_batches} batches complete")
+    
+    logger.info("Applying PCKMT complete")

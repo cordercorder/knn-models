@@ -60,6 +60,10 @@ class PCKMTDataset(Dataset):
             # value is a scalar
             value = datastore_values[i]
 
+            if value == 3:
+                # 3 is UNK
+                continue
+
             # key is a numpy array
             key = datastore_keys[i]
             keys_per_value[value].append(key)
@@ -71,6 +75,7 @@ class PCKMTDataset(Dataset):
         datastore_keys_new = []
 
         for value, keys in enumerate(keys_per_value):
+
             # keys is a list of numpy array
             num_keys = len(keys)
 
@@ -78,7 +83,9 @@ class PCKMTDataset(Dataset):
                 continue
 
             if num_keys <= dbscan_min_samples:
-                pass
+                keys = np.asarray(keys, dtype=np.float32)
+                datastore_keys_new.append(keys)
+                continue
             
             if num_keys > dbscan_max_samples:
                 keys = rng.choice(keys, size=dbscan_max_samples, replace=False)
@@ -102,6 +109,8 @@ class PCKMTDataset(Dataset):
                     # [ndarray1, ndarray2, ...] -> ndarray
                     keys = np.asarray(keys)
                     datastore_keys_new.append(keys)
+
+        logger.info(f"Cluster number: {len(datastore_keys_new)}")
 
         centroid_keys = []
 
