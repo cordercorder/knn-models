@@ -86,8 +86,11 @@ def get_parser():
                                 help="maximum training epochs")
             parser.add_argument("--update-freq", type=int, default=1, 
                                 help="update parameters every `update_freq` batches")
+            parser.add_argument("--keep-best-checkpoints", type=int, default=-1,
+                                help="keep best N checkpoints based on loss, a negative "
+                                "number means save all checkpoints")
             
-            parser.add_argument("--lr", type=float, default=0.0005,
+            parser.add_argument("--lr", type=float, default=0.0003,
                                 help="learning rate")
             parser.add_argument("--betas", type=eval, default="(0.9, 0.999)", 
                                 help="betas for Adam optimizer")
@@ -151,6 +154,7 @@ def cli_main():
                 args.max_update,
                 args.max_epoch,
                 args.update_freq,
+                args.keep_best_checkpoints,
                 args.lr,
                 args.betas,
                 args.weight_decay,

@@ -1,4 +1,5 @@
 import os
+import re
 import math
 import faiss
 import torch
@@ -141,6 +142,7 @@ def train_pckmt(
     max_update,
     max_epoch,
     update_freq,
+    keep_best_checkpoints,
     lr,
     betas,
     weight_decay,
@@ -152,6 +154,44 @@ def train_pckmt(
     seed,
     transformed_datastore,
 ):
+
+    def save_checkpoint(state_dict, epoch, update, loss):
+        if keep_best_checkpoints == 0:
+            # do not save any checkpoint
+            return 
+
+        checkpoint_name = f"checkpoint.epoch_{epoch}.update_{update}.loss_{loss:.3f}.pt"
+        checkpoint_path = os.path.join(transformed_datastore, checkpoint_name)
+
+        if keep_best_checkpoints < 0:
+            torch.save(state_dict, checkpoint_path)
+        else:
+            pattern = re.compile(r"checkpoint\.epoch_(\d+)\.update_(\d+)\.loss_(\d+.\d+)\.pt")
+
+            checkpoints = []
+
+            for file_name in os.listdir(transformed_datastore):
+                match_obj = pattern.fullmatch(file_name)
+                if match_obj is not None:
+                    file_path = os.path.join(transformed_datastore, file_name)
+                    ckpt_update = int(match_obj.group(2))
+                    ckpt_loss = float(match_obj.group(3))
+                    checkpoints.append((ckpt_loss, ckpt_update, file_path))
+            
+            checkpoints.sort()
+
+            if len(checkpoints) + 1 > keep_best_checkpoints:
+                if checkpoints[-1][0] >= loss:
+                    # if loss of the new checkpoint is not greater than the old checkpoint
+                    # remove the old checkpoint and save the new one
+                    os.remove(checkpoints[-1][-1])
+                    torch.save(state_dict, checkpoint_path)
+            else:
+                # if the number of saved checkpoint is not greater than keep_best_checkpoints-1
+                # save the new checkpoint
+                torch.save(state_dict, checkpoint_path)
+
+
     set_seed(seed)
 
     compact_net = CompactNet(
@@ -210,8 +250,6 @@ def train_pckmt(
     num_updates = 0
     accumulated_bsz = 0
     should_stop = False
-
-    checkpoints_info = []
 
     max_update = max_update or math.inf
 
@@ -322,28 +360,9 @@ def train_pckmt(
         epoch_acc = n_correct_per_epoch / bsz_per_epoch
         logger.info(f"Epoch loss: {epoch_loss: .5f}, Epoch acc: {epoch_acc: .5f}")
 
-        checkpoint_name = f"checkpoint{epoch}.pt"
-        checkpoint_path = os.path.join(transformed_datastore, checkpoint_name)
-        torch.save(compact_net.state_dict(), checkpoint_path)
-        logger.info(f"Saving {checkpoint_name} complete")
-
-        checkpoints_info.append((checkpoint_name, epoch_loss))
+        save_checkpoint(compact_net.state_dict(), epoch, num_updates, epoch_loss)
     
-    if should_stop:
-        checkpoint_name = "checkpoint_last.pt"
-        checkpoint_path = os.path.join(transformed_datastore, checkpoint_name)
-        torch.save(compact_net.state_dict(), checkpoint_path)
-        logger.info(f"Saving {checkpoint_name} complete")
-
-        checkpoints_info.append((checkpoint_name, loss_per_epoch / bsz_per_epoch))
-
     logger.info("Training PCKMT complete")
-
-    checkpoints_info.sort(key=lambda item: item[1], reverse=True)
-    logger.info("Loss of all checkpoints")
-
-    for checkpoint_name, loss in checkpoints_info:
-        logger.info(f"Checkpoint: {checkpoint_name}, loss: {loss: .5f}")
 
 
 def apply_pckmt(
