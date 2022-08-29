@@ -206,7 +206,7 @@ def main(cfg: DictConfig):
     else:
         datastore_values = None
 
-    # additional 4 gram target and probability will be generated in the case of PCKMT datastore
+    # additional 4-gram target and probability will be generated in the case of PCKMT datastore
     is_pckmt_datastore = os.environ.get("PCKMT_DATASTORE", None) is not None
     logger.info(f"Is PCKMT datastore: {is_pckmt_datastore}")
 

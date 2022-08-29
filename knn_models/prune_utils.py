@@ -3,6 +3,8 @@ import faiss
 import logging
 import numpy as np
 
+from scipy.cluster import Birch
+
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +179,7 @@ def greedy_merge_pruning(
 
     pruned_datastore_weight_indices = np.nonzero(pruned_datastore_weight_mask)
 
-    logger.info("Start writing the pruned datastore into disk")
+    logger.info("Start writing the pruned datastore to disk")
     pruned_datastore_keys[:] = datastore_keys[pruned_datastore_weight_indices]
     pruned_datastore_values[:] = datastore_values[pruned_datastore_weight_indices]
     pruned_datastore_weight[:] = datastore_weight[pruned_datastore_weight_indices].astype(np.float32)
@@ -246,3 +248,203 @@ def random_pruning(
     pruned_datastore_values.flush()
 
     logger.info("Random pruning complete")
+
+
+def cluster_based_pruning(
+    datastore,
+    datastore_size,
+    keys_dimension,
+    keys_dtype,
+    pruned_datastore,
+    n_gram,
+    translation_cost_threshold,
+    sample_rate,
+    minimum_sample_num,
+    seed,
+):
+    assert 1 <= n_gram <= 4, \
+        f"Does not implement pruning based on {n_gram}-gram yet!"
+
+    datastore_4_gram_values_path = os.path.join(datastore, "4_gram_values.npy")
+    datastore_4_gram_values = np.memmap(
+        datastore_4_gram_values_path,
+        dtype=np.int64,
+        mode="r", 
+        shape=(datastore_size, 4)
+    )
+
+    datastore_4_gram_values_probs_path = os.path.join(datastore, "4_gram_values_probs.npy")
+    datastore_4_gram_values_probs = np.memmap(
+        datastore_4_gram_values_probs_path,
+        dtype=np.float32,
+        mode="r", 
+        shape=(datastore_size, 4)
+    )
+
+    non_padding_mask = datastore_4_gram_values != -1
+
+    # datastore_size x 4
+    log_4_gram_values_probs = -np.log(np.where(non_padding_mask, datastore_4_gram_values_probs, 1e-19))
+    del non_padding_mask
+
+    # datastore_size x n_gram
+    log_4_gram_values_probs = log_4_gram_values_probs[:, :n_gram]
+
+    # datastore_size x n_gram
+    log_4_gram_values_ppl = np.empty_like(log_4_gram_values_probs)
+
+    for n in range(1, n_gram + 1):
+        log_4_gram_values_ppl[:, n] = log_4_gram_values_probs[:, : n].sum(axis=1) / n
+
+    del log_4_gram_values_probs
+
+    # datastore_size
+    translation_cost = np.min(log_4_gram_values_ppl, axis=1)
+    del log_4_gram_values_ppl
+
+    datastore_n_gram_values = datastore_4_gram_values[:, : n_gram]
+
+    # ngram to its indice
+    ngram_to_idx = {}
+    for idx, ngram in enumerate(datastore_n_gram_values):
+        ngram = tuple(ngram)
+        ngram_to_idx.setdefault(ngram, []).append(idx)
+    
+    for ngram, idxs in ngram_to_idx.items():
+        ngram_to_idx[ngram] = np.asarray(idxs, dtype=np.int64)
+
+    rng = np.random.default_rng(seed)
+
+    for ngram, idxs in ngram_to_idx.items():
+        ngram_translation_cost = translation_cost[idxs]
+
+        if ngram_translation_cost.shape[0] <= 10000:
+            # affinity greedy searching
+
+            # size x size
+            ngram_translation_cost_diff = \
+                np.expand_dims(ngram_translation_cost, axis=0) - \
+                    np.expand_dims(ngram_translation_cost, axis=1)
+
+            cost_diff_below_threshold = np.abs(ngram_translation_cost_diff) <= translation_cost_threshold
+
+            split_clusters = []
+
+            remain_ngram_idx = np.arange(ngram_translation_cost.shape[0])
+
+            # greedy clustering on translation costs
+            while cost_diff_below_threshold.shape[0] > 0:
+                num_cost_diff_below_threshold = cost_diff_below_threshold.sum(axis=1)
+                row_idx = num_cost_diff_below_threshold.argmax()
+                selected_ngram_mask = cost_diff_below_threshold[row_idx]
+                split_clusters.append(remain_ngram_idx[selected_ngram_mask])
+
+                non_selected_ngram_mask = np.logical_not(selected_ngram_mask)
+                del selected_ngram_mask
+                
+                num_cost_diff_below_threshold = num_cost_diff_below_threshold[non_selected_ngram_mask]
+                num_cost_diff_below_threshold = num_cost_diff_below_threshold[:, non_selected_ngram_mask]
+
+                remain_ngram_idx = remain_ngram_idx[non_selected_ngram_mask]
+                del non_selected_ngram_mask
+            
+            # uniform pruning
+            for i, cluster_idx in enumerate(split_clusters):
+                sample_num = max(minimum_sample_num, int(cluster_idx.shape[0] * sample_rate))
+                
+                if sample_num >= cluster_idx.shape[0]:
+                    continue
+                
+                split_clusters[i] = rng.choice(cluster_idx, sample_num, replace=False)
+
+            remain_ngram_idx = np.concatenate(split_clusters, axis=0)
+            del split_clusters
+        else:
+            # linear cluster (faster, not optical but acceptable)
+
+            # greedy clustering on translation costs
+            clustering = Birch(n_clusters=None, threshold=translation_cost_threshold)
+            clustering.fit(np.expand_dims(ngram_translation_cost, axis=1))
+
+            labels = clustering.labels_
+
+            split_clusters = [list() for _ in range(labels.max() + 1)]
+
+            # collect the isolated nodes
+            isolated_nodes = []
+            for i, label in enumerate(labels):
+                # -1 means isolated sample
+                if label == -1:
+                    isolated_nodes.append(i)
+                else:
+                    split_clusters[label].append(i)
+            
+            # uniform pruning
+            remain_ngram_idx = []
+            for cluster_idx in split_clusters:
+                if len(cluster_idx) == 0:
+                    continue
+
+                cluster_idx = np.asarray(cluster_idx)
+                sample_num = max(minimum_sample_num, int(cluster_idx.shape[0] * sample_rate))
+
+                if sample_num < cluster_idx.shape[0]:
+                    cluster_idx = rng.choice(cluster_idx, sample_num, replace=False)
+
+                remain_ngram_idx.append(cluster_idx)
+            
+            # add the isolated nodes
+            remain_ngram_idx.extend(isolated_nodes)
+            del isolated_nodes
+        
+        remain_ngram_idx = np.concatenate(remain_ngram_idx, axis=0)
+        ngram_to_idx[ngram] = idxs[remain_ngram_idx]
+        del remain_ngram_idx
+    
+    remain_idx = []
+    for idxs in ngram_to_idx.values():
+        remain_idx.append(idxs)
+    
+    remain_idx = np.concatenate(remain_idx, axis=0)
+    remain_idx = np.sort(remain_idx)
+    logger.info(f"Datastore size after pruning: {remain_idx.shape[0]}")
+
+    datastore_keys_path = os.path.join(datastore, "keys.npy")
+    keys_dtype = np.float32 if keys_dtype == "fp32" else np.float16
+    datastore_keys = np.memmap(
+        datastore_keys_path, 
+        dtype=keys_dtype, 
+        mode="r", 
+        shape=(datastore_size, keys_dimension)
+    )
+
+    pruned_datastore_keys_path = os.path.join(pruned_datastore, "keys.npy")
+    logger.info(f"Saving pruned datastore keys in {pruned_datastore_keys_path}")
+    pruned_datastore_keys = np.memmap(
+        pruned_datastore_keys_path,
+        dtype=keys_dtype,
+        mode="w+",
+        shape=(remain_idx.shape[0], keys_dimension)
+    )
+    pruned_datastore_keys[:] = datastore_keys[remain_idx]
+    pruned_datastore_keys.flush()
+
+    datastore_values_path = os.path.join(datastore, "values.npy")
+    datastore_values = np.memmap(
+        datastore_values_path,
+        dtype=np.int64,
+        mode="r",
+        shape=(datastore_size, )
+    )
+
+    pruned_datastore_values_path = os.path.join(pruned_datastore, "values.npy")
+    logger.info(f"Saving pruned datastore values in {pruned_datastore_values_path}")
+    pruned_datastore_values = np.memmap(
+        pruned_datastore_values_path,
+        dtype=np.int64,
+        mode="w+",
+        shape=(remain_idx.shape[0], )
+    )
+    pruned_datastore_values[:] = datastore_values[remain_idx]
+    pruned_datastore_values.flush()
+    logger.info("Cluster based pruning complete")
