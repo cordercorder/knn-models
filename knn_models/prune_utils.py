@@ -3,7 +3,7 @@ import faiss
 import logging
 import numpy as np
 
-from scipy.cluster import Birch
+from sklearn.cluster import Birch
 
 
 logger = logging.getLogger(__name__)
@@ -294,7 +294,7 @@ def cluster_based_pruning(
     log_4_gram_values_ppl = np.empty_like(log_4_gram_values_probs)
 
     for n in range(1, n_gram + 1):
-        log_4_gram_values_ppl[:, n] = log_4_gram_values_probs[:, : n].sum(axis=1) / n
+        log_4_gram_values_ppl[:, n - 1] = log_4_gram_values_probs[:, : n].sum(axis=1) / n
 
     del log_4_gram_values_probs
 
@@ -304,6 +304,7 @@ def cluster_based_pruning(
 
     datastore_n_gram_values = datastore_4_gram_values[:, : n_gram]
 
+    logger.info("Start collecting indice of each n-gram")
     # ngram to its indice
     ngram_to_idx = {}
     for idx, ngram in enumerate(datastore_n_gram_values):
@@ -314,6 +315,7 @@ def cluster_based_pruning(
         ngram_to_idx[ngram] = np.asarray(idxs, dtype=np.int64)
 
     rng = np.random.default_rng(seed)
+    logger.info("Start cluster based pruning")
 
     for ngram, idxs in ngram_to_idx.items():
         ngram_translation_cost = translation_cost[idxs]
@@ -341,9 +343,11 @@ def cluster_based_pruning(
 
                 non_selected_ngram_mask = np.logical_not(selected_ngram_mask)
                 del selected_ngram_mask
-                
-                num_cost_diff_below_threshold = num_cost_diff_below_threshold[non_selected_ngram_mask]
-                num_cost_diff_below_threshold = num_cost_diff_below_threshold[:, non_selected_ngram_mask]
+                cost_diff_below_threshold = cost_diff_below_threshold[non_selected_ngram_mask]
+
+                if non_selected_ngram_mask.any():
+                    # to handle the case that cost_diff_below_threshold is an empty array
+                    cost_diff_below_threshold = cost_diff_below_threshold[:, non_selected_ngram_mask]
 
                 remain_ngram_idx = remain_ngram_idx[non_selected_ngram_mask]
                 del non_selected_ngram_mask
@@ -397,7 +401,8 @@ def cluster_based_pruning(
             remain_ngram_idx.extend(isolated_nodes)
             del isolated_nodes
         
-        remain_ngram_idx = np.concatenate(remain_ngram_idx, axis=0)
+            remain_ngram_idx = np.concatenate(remain_ngram_idx, axis=0)
+        
         ngram_to_idx[ngram] = idxs[remain_ngram_idx]
         del remain_ngram_idx
     

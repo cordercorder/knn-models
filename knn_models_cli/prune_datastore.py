@@ -6,6 +6,7 @@ import argparse
 from knn_models.prune_utils import (
     random_pruning,
     greedy_merge_pruning,
+    cluster_based_pruning,
 )
 
 
@@ -123,6 +124,23 @@ def cli_main():
             args.pruned_datastore_size,
             args.seed,
         )
+    
+    elif args.method == "cluster_based_pruning":
+        cluster_based_pruning(
+            args.datastore,
+            args.datastore_size,
+            args.keys_dimension,
+            args.keys_dtype,
+            args.pruned_datastore,
+            args.n_gram,
+            args.translation_cost_threshold,
+            args.sample_rate,
+            args.minimum_sample_num,
+            args.seed,
+        )
+
+    else:
+        raise ValueError("Unknown method")
 
 
 if __name__ == "__main__":
