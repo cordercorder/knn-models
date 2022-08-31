@@ -18,12 +18,14 @@ from fairseq.sequence_generator import EnsembleModel
 
 
 logging.basicConfig(
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=os.environ.get("LOGLEVEL", "INFO").upper(),
-        stream=sys.stdout,
-    )
-logger = logging.getLogger("knn_models_cli.generate_datastore")
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=os.environ.get("LOGLEVEL", "INFO").upper(),
+    stream=sys.stdout,
+)
+
+
+logger = logging.getLogger("knn_models_cli.generate_mt_datastore")
 
 
 def get_symbols_to_strip_from_output(generator):
