@@ -58,6 +58,7 @@ def build_ivfpq_index(
             index = faiss.index_cpu_to_gpu(provider=resource, device=0, index=index, options=cloner_options)
 
         if datastore_keys.shape[0] > num_trained_keys:
+            logger.info(f"Start sampling {num_trained_keys} datastore keys")
             # If the number of keys is larger than `args.num_trained_keys`
             # We sample a subset of keys to train the faiss index
             rng = np.random.default_rng(seed)
