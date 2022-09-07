@@ -23,7 +23,10 @@ class KnnSearch:
         self.cfg = cfg
 
         if not cfg.saving_mode:
-            self.setup_knn_search()
+            if not self.cfg.use_sentence_constraint:
+                self.setup_knn_search()
+            else:
+                logger.info('use sentence constraint')
 
     def setup_knn_search(self):
         index_path = os.path.join(self.cfg.datastore, "faiss.index")

@@ -1,4 +1,7 @@
+from curses import meta
+from email.policy import default
 from typing import List
+from importlib_metadata import metadata
 from omegaconf import MISSING
 from dataclasses import dataclass, field
 from fairseq.dataclass import FairseqDataclass, ChoiceEnum
@@ -88,6 +91,50 @@ class BaseKnnConfig(FairseqDataclass):
             "help": "whether to use saving mode. "
             "the knn search setup process will be skipped in saving mode. "
             "saving mode is usually used when saving datastore"
+        }
+    )
+
+    use_sentence_constraint: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use sentence-level constraint!"
+            "original KNN use index at token-level. By set use_sentence_constraint=True,"
+            "we can use the sentence-level search for every sentences, and formulate a new index during every batch."
+        }
+    )
+
+    index_name: str = field(
+        default='koran',
+        metadata={
+            "help": "The index in elasticsearch to save the raw retrieval data."
+        }
+    )
+
+    overwriter_index: bool = field(
+        default=False,
+        metadata={
+            "help": "whether to overwrite the create index."
+        }
+    )
+
+    es_ip: str = field(
+        default='localhost',
+        metadata={
+            "help": "the ip to connected to Elasticsearch"
+        }
+    )
+
+    es_port: str = field(
+        default='9200',
+        metadata={
+            "help": "the port to connected to Elasticsearch",
+        }
+    )
+
+    max_concurrent_searches: int = field(
+        default=64,
+        metadata={
+            "help": "max concurrent search during es search. might related to you CPUs."
         }
     )
 
