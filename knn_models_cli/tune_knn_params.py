@@ -255,11 +255,11 @@ def validate_args(args: Namespace):
     "`candidate_temperature_value` and `candidate_params` must be set"
 
     if args.candidate_params is not None:
-        assert isinstance(args.candidate_params, (int, tuple)), \
+        assert isinstance(args.candidate_params, (list, tuple)), \
             "`candidate_params` must be an instance of list or tuple"
         
         for params in args.candidate_params:
-            assert isinstance(params, (int, tuple)), \
+            assert isinstance(params, (list, tuple)), \
                 "The elements in `candidate_params` must be an instance of list or tuple"
             
             assert len(params) == 3, \

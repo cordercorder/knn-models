@@ -6,6 +6,7 @@ import argparse
 from knn_models.prune_utils import (
     random_pruning,
     greedy_merge_pruning,
+    cluster_based_pruning,
 )
 
 
@@ -26,7 +27,9 @@ def get_parser():
     parser.add_argument("--seed", type=int, default=1, 
                         help="random seed")
 
-    parser.add_argument("--method", type=str, choices=["random_pruning", "greedy_merge"], required=True, 
+    parser.add_argument("--method", type=str, 
+                        choices=["random_pruning", "greedy_merge", "cluster_based_pruning"], 
+                        required=True, 
                         help="method used for datastore pruning")
 
     parser.add_argument("--datastore", required=True, type=str, 
@@ -45,7 +48,7 @@ def get_parser():
 
     if args.method == "greedy_merge":
         parser.add_argument("--use-gpu", action="store_true", default=False, 
-                            help="whether to use GPU to train the faiss index")
+                            help="whether to use GPU to perform k-nearest neighbor search")
 
         parser.add_argument("--batch-size", default=1024, type=int, 
                             help="number of keys in one batch")
@@ -63,10 +66,22 @@ def get_parser():
         parser.add_argument("--log-interval", type=int, default=100, 
                             help="print the progress in an interval "
                             "during retrieving k-nearest neighbors for each keys in the datastore")
+        
     elif args.method == "random_pruning":
         parser.add_argument("--pruned-datastore-size", type=int, required=True, 
                             help="the datastore size after ramdom pruning")
-
+    
+    elif args.method == "cluster_based_pruning":
+        parser.add_argument("--n-gram", type=int, default=2,
+                            help="contiguous sequence of n items")
+        parser.add_argument("--translation-cost-threshold", type=float, default=1.5, 
+                            help="translation cost threshold for clustering")
+        parser.add_argument("--sample-rate", type=float, default=0.3,
+                            help="sample rate of datastore in each cluster")
+        parser.add_argument("--minimum-sample-num", type=int, default=2,
+                            help="minumum number of samples to get when adopt "
+                            "uniform sampling on each group")
+        
     return parser
 
 
@@ -98,7 +113,7 @@ def cli_main():
     elif args.method == "random_pruning":
         # validate args
         assert args.pruned_datastore_size < args.datastore_size, \
-            "datastore size after pruning should be small than original datastore size"
+            "datastore size after pruning should be smaller than original datastore size"
 
         random_pruning(
             args.datastore,
@@ -109,6 +124,23 @@ def cli_main():
             args.pruned_datastore_size,
             args.seed,
         )
+    
+    elif args.method == "cluster_based_pruning":
+        cluster_based_pruning(
+            args.datastore,
+            args.datastore_size,
+            args.keys_dimension,
+            args.keys_dtype,
+            args.pruned_datastore,
+            args.n_gram,
+            args.translation_cost_threshold,
+            args.sample_rate,
+            args.minimum_sample_num,
+            args.seed,
+        )
+
+    else:
+        raise ValueError("Unknown method")
 
 
 if __name__ == "__main__":

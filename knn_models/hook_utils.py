@@ -3,6 +3,7 @@ import torch
 import logging
 
 from knn_models.dim_reduce_utils import (
+    CompactNet,
     PCATransform, 
 )
 
@@ -35,6 +36,10 @@ class DimReduceForwardHook(ForwardHook):
 
         if args.dim_reduce_method == "PCA":
             transform = PCATransform(**args)
+        elif args.dim_reduce_method == "PCKMT":
+            transform = CompactNet(**args)
+        else:
+            raise ValueError("Unkown dimension reduction method")
         
         transform_ckpt_path = os.path.join(args.datastore, args.transform_ckpt_name)
 
@@ -46,6 +51,8 @@ class DimReduceForwardHook(ForwardHook):
         if use_cuda:
             logger.info(f"Moving {transform.__class__.__name__} to GPU")
             transform = transform.cuda()
+        
+        transform.eval()
 
         self.transform = transform
     

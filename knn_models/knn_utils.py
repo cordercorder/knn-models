@@ -74,9 +74,10 @@ class KnnSearch:
 
         else:
             assert len(self.cfg.knn_device_id) == 1, "Only one device can be used when perform kNN search on CPU"
-        
-        logger.info(f"Setting nprobe of index to {self.cfg.nprobe}")
-        index.nprobe = self.cfg.nprobe
+
+        if hasattr(index, "nprobe"):
+            logger.info(f"Setting nprobe of index to {self.cfg.nprobe}")
+            index.nprobe = self.cfg.nprobe
 
         datastore_values_path = os.path.join(self.cfg.datastore, "values.npy")
         logger.info(f"Loading datastore values from {datastore_values_path}")
