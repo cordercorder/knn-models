@@ -118,7 +118,7 @@ def build_flatl2_index(
 
 
 def main(args: Namespace):
-    if args.keys_type == "fp16":
+    if args.keys_dtype == "fp16":
         keys_dtype = np.float16
     else:
         keys_dtype = np.float32
@@ -173,7 +173,7 @@ def get_parser():
     parser.add_argument("--datastore", required=True, type=str, help="path to datastore directory")
     parser.add_argument("--datastore-size", required=True, type=int, help="the number of tokens in datastore")
     parser.add_argument("--keys-dimension", required=True, type=int, help="the feature dimension of datastore keys")
-    parser.add_argument("--keys-type", default="fp16", choices=["fp16", "fp32"], type=str, help="keys dtype of the datastore")
+    parser.add_argument("--keys-dtype", default="fp16", choices=["fp16", "fp32"], type=str, help="keys dtype of the datastore")
 
     parser.add_argument("--use-gpu", action="store_true", default=False, help="whether to use GPU to build the faiss index")
     parser.add_argument("--knn-fp16", action="store_true", default=False, help="whether to perform intermediate calculations in float16")
