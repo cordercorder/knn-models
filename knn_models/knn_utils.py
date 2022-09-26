@@ -8,9 +8,17 @@ import numpy as np
 
 from torch import Tensor
 from fairseq import utils
+from fairseq.data import data_utils
+from fairseq.tasks.translation import TranslationTask
+
+    
 from knn_models.dataclass import (
     KnnConfig, 
     AdaptiveKnnConfig,
+)
+
+from knn_models.es_utils import (
+    Elastic
 )
 from typing import Dict, List, Optional, Tuple
 
@@ -18,15 +26,144 @@ from typing import Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+class SentenceSearch:
+
+    def __init__(self, cfg: KnnConfig, connection: Elastic):
+
+        self.cfg = cfg
+        self.es_connection = connection
+        # TODO should we set 'source_lang' & 'target_lang' to args?
+        self.source_lang, self.target_lang = data_utils.infer_language_pair(self.cfg.sentence_retrieval_fairseq_data)
+
+        self.es_connection.source_lang = self.source_lang
+        self.es_connection.target_lang = self.target_lang
+
+        # use during build sentence index. 
+        self.batch_keys = None
+        self.keys_dtype = np.float32 if self.cfg.keys_dtype == "fp32" else np.float16
+
+
+        self.sentence_source_dict = TranslationTask.load_dictionary(
+            f"{self.cfg.sentence_retrieval_fairseq_data}/dict.{self.source_lang}.txt"
+        )
+        self.sentence_target_dict = TranslationTask.load_dictionary(
+            f"{self.cfg.sentence_retrieval_fairseq_data}/dict.{self.target_lang}.txt"
+        )
+        
+        self.sentence_retrieval_data = data_utils.load_indexed_dataset(
+            f"{self.cfg.sentence_retrieval_fairseq_data}/train.{self.source_lang}-{self.target_lang}.{self.target_lang}",
+            self.sentence_target_dict,
+            dataset_impl='mmap'
+        )
+
+         # TODO the bpe file name should fix?
+        source_data_path =  f"{self.cfg.sentence_retrieval_bpe_data}/train.bpe.filtered.{self.source_lang}"
+        target_data_path =  f"{self.cfg.sentence_retrieval_bpe_data}/train.bpe.filtered.{self.target_lang}"
+        
+        logger.info(f'source_bpe_data path to create index:{source_data_path}')
+        logger.info(f'target_bpe_data path to create index:{target_data_path}')
+
+        self.es_connection.es_create_datasetore(self.cfg.index_name, source_data_path, target_data_path)
+
+
+    def build_sentence_index(self, sample):
+        batch_body = []
+
+        for src_tokens in sample['net_input']['src_tokens']:
+            bpe_sentence = self.sentence_source_dict.string(src_tokens, extra_symbols_to_ignore=[self.sentence_source_dict.pad()]).strip()
+            cur_body = [
+                {'index': self.cfg.index_name},
+                {
+                    "query":{
+                        "match":{
+                            f"{self.source_lang}_data": bpe_sentence,
+                        }
+                    },
+                    "size": self.cfg.sentence_retrieval_size,
+                }
+            ]
+            batch_body.extend(cur_body)
+
+        batch_result, batch_ids = self.es_connection.query_index(self.cfg.index_name, batch_body)
+
+        # TODO.  can use rouge_score to rerank?
+        if self.cfg.sentence_use_rerank:
+            try:
+                from rapidfuzz import process
+                from rapidfuzz.distance.Levenshtein import normalized_similarity
+            except Exception:
+                raise Exception('please install rapidfuzz for fuzz-rerank. (pip install rapidfuzz==2.0.11)')
+            
+            for cur_index, result in enumerate(batch_result):
+                src_tokens = sample['net_input']['src_tokens'][cur_index]
+                bpe_sentence = self.sentence_source_dict.string(src_tokens,extra_symbols_to_ignore=[self.sentence_source_dict.pad()]).strip()
+                rerank_result = process.extract(
+                        bpe_sentence,
+                        [item[0] for item in result],
+                        scorer=normalized_similarity,
+                        limit=self.cfg.sentence_final_size,
+                    )
+        else:
+            # TODO. we should use batch
+            for cur_index, result in enumerate(batch_result):
+                src_tokens = sample['net_input']['src_tokens'][cur_index]
+
+        offset = 0
+        batch_feature_lengthes = sum([len(self.sentence_retrieval_data[id]) for id in batch_ids])
+        batch_keys = np.zeros([batch_feature_lengthes, self.cfg.keys_dimension], dtype=self.keys_dtype)
+        batch_values = np.zeros([batch_feature_lengthes,], dtype=np.int64)
+
+        for cur_id in batch_ids:
+            cur_key_path = self.cfg.datastore + f'/keys_{cur_id}.npy'
+            cur_value_path = self.cfg.datastore + f'/values_{cur_id}.npy'
+            cur_length = len(self.sentence_retrieval_data[cur_id])
+            cur_keys = np.memmap(
+                cur_key_path, 
+                dtype=self.keys_dtype, 
+                mode="r", 
+                shape=(cur_length, self.cfg.keys_dimension)
+            )
+            # TODO. seems equal to self.sentence_retrieval_data[cur_id]
+            cur_values = np.memmap(
+                cur_value_path,
+                dtype=np.int64,
+                mode="r",
+                shape=(cur_length, )
+            )
+            batch_keys[offset: offset + cur_length] = cur_keys
+            batch_values[offset: offset + cur_length] = cur_values
+            offset += cur_length
+
+        self.batch_keys = torch.from_numpy(batch_keys).to(self.cfg.knn_device_id[0])
+        batch_values = torch.from_numpy(batch_values).to(self.cfg.knn_device_id[0])
+
+        # TODO should also build datastore_value_weights here?
+        batch_values_weights = None
+        return batch_values, batch_values_weights
+
+    def search(self, queries, num_neighbors):
+        # NOTE 
+        queries = queries.to(self.batch_keys.dtype).detach()
+        norms_xq = (queries ** 2).sum(axis=1)
+        norms_xb = (self.batch_keys ** 2).sum(axis=1)
+        distances = norms_xq.reshape(-1, 1) + norms_xb -2 * queries @ self.batch_keys.T 
+        return torch.topk(distances, num_neighbors, largest=False)
+
 class KnnSearch:
     def __init__(self, cfg: KnnConfig):
         self.cfg = cfg
 
         if not cfg.saving_mode:
-            if not self.cfg.use_sentence_constraint:
-                self.setup_knn_search()
-            else:
+            if self.cfg.use_sentence_constraint:
                 logger.info('use sentence constraint')
+                es_connection = Elastic(args=self.cfg)
+                self.index = SentenceSearch(self.cfg, es_connection) 
+            else:
+                self.setup_knn_search()
+
+    def setup_sentence_search(self, sample):
+        self.datastore_values, self.datastore_value_weights = self.index.build_sentence_index(sample)
+
 
     def setup_knn_search(self):
         index_path = os.path.join(self.cfg.datastore, "faiss.index")
@@ -140,14 +277,20 @@ class KnnSearch:
         queries = queries.contiguous().view(-1, queries.size(-1))
 
         # B*T x K
-        distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
+        if self.cfg.use_sentence_constraint:
+            distance, idx = self.index.search(queries, self.cfg.num_neighbors)
+            tgt_idx = self.datastore_values[idx]
+            tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+            distance = distance.view(bsz, seq_len, -1)
+        else:
+            distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
 
-        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
-        tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+            tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
+            tgt_idx = tgt_idx.view(bsz, seq_len, -1)
 
-        # distance and queries should have the same device
-        distance = torch.from_numpy(distance).to(queries.device)
-        distance = distance.view(bsz, seq_len, -1)
+            # distance and queries should have the same device
+            distance = torch.from_numpy(distance).to(queries.device)
+            distance = distance.view(bsz, seq_len, -1)
 
         distance.neg_()
 

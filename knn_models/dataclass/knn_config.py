@@ -137,6 +137,41 @@ class BaseKnnConfig(FairseqDataclass):
             "help": "max concurrent search during es search. might related to you CPUs."
         }
     )
+    
+    sentence_retrieval_fairseq_data: str = field(
+        default=MISSING,
+        metadata={
+            "help": " Path to the fairseq data. (for load dict.)"
+        }
+    )
+    
+    sentence_retrieval_bpe_data: str = field(
+        default=MISSING,
+        metadata={
+            "help": " Path to the bpe data that generate the fairseq data. (for elasticsearch save)"
+        }
+    )
+
+    sentence_retrieval_size: int = field(
+        default=10,
+        metadata={
+            "help": "num of retrieved data through Elasticsearch."
+        }
+    )
+
+    sentence_use_rerank: bool = field(
+        default=False,
+        metadata={
+            "help": "whether to use fuzz-rerank. (defult use rapidfuzz)"
+        }
+    )
+
+    sentence_final_size: int = field(
+        default=10,
+        metadata={
+            "help": "if set sentence_use_rerank = True. rerank the retrieval sentence and save the top-(sentence-final-size)."
+        }
+    )
 
 
 @dataclass
