@@ -54,7 +54,7 @@ class TranslationAdaptiveKnnTask(TranslationTask):
         meta_k_network = self.build_meta_k_network()
         model.add_module("meta_k_network", meta_k_network)
 
-        # make the meta-k network of the model and knn_search shared with each other
+        # make the meta-k network in the model and knn_search shared with each other
         self.knn_search.meta_k_network = meta_k_network
 
         # rewrite `load_state_dict` function to successfully load the pretrained models when there are no meta-k networks in them

@@ -157,7 +157,8 @@ class KnnSearch:
         distance.div_(self.cfg.temperature_value)
         
         distance = utils.softmax(distance, dim=-1)
-
+        
+        distance.mul_(self.cfg.lambda_value)
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": self.cfg.lambda_value}
 
 
@@ -301,7 +302,7 @@ def get_normalized_probs(
     lambda_value = search_results["lambda_value"]
 
     mt_prob.mul_(1.0 - lambda_value)
-    mt_prob.scatter_add_(dim=2, index=search_results["tgt_idx"], src=search_results["knn_prob"].mul_(lambda_value))
+    mt_prob.scatter_add_(dim=2, index=search_results["tgt_idx"], src=search_results["knn_prob"])
 
     if log_probs:
         mt_prob.log_()
