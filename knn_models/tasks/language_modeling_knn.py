@@ -40,6 +40,8 @@ class LanguageModelingKnnTask(LanguageModelingTask):
         captured_module = get_captured_module(model.decoder, captured_module_name)
         captured_module.register_forward_hook(self.forward_hook.forward_hook_function)
 
-        # rewrite `get_normalized_probs` function to support kNN augmented NMT
-        model.get_normalized_probs = partial(get_normalized_probs, self, model)
+        if not self.args.knn_config.saving_mode:
+            # rewrite `get_normalized_probs` function to support kNN augmented NMT
+            model.get_normalized_probs = partial(get_normalized_probs, self, model)
+        
         return model
