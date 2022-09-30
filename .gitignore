@@ -4,3 +4,4 @@ __pycache__/
 .vscode/
 /experiments/
 /experiments_scripts/
+/knn_models.egg-info/

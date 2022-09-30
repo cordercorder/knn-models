@@ -136,29 +136,33 @@ class KnnSearch:
         # B*T x C
         queries = queries.contiguous().view(-1, queries.size(-1))
 
+        queries_device = queries.device
+
         # B*T x K
         distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
-
-        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
-        tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+        del queries
 
         # distance and queries should have the same device
-        distance = torch.from_numpy(distance).to(queries.device)
+        distance = torch.from_numpy(distance).to(queries_device)
         distance = distance.view(bsz, seq_len, -1)
 
         distance.neg_()
 
         if self.datastore_value_weights is not None:
-            weight = torch.from_numpy(self.datastore_value_weights[idx]).to(queries.device)
+            weight = torch.from_numpy(self.datastore_value_weights[idx]).to(queries_device)
             weight = weight.view(bsz, seq_len, -1)
             # following the original implementation in `Efficient Nearest Neighbor Language Models`
             distance.add_(weight.log_())
+            del weight
         
         distance.div_(self.cfg.temperature_value)
         
         distance = utils.softmax(distance, dim=-1)
         
         distance.mul_(self.cfg.lambda_value)
+
+        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries_device)
+        tgt_idx = tgt_idx.view(bsz, seq_len, -1)
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": self.cfg.lambda_value}
 
 
@@ -202,14 +206,18 @@ class AdaptiveKnnSearch(KnnSearch):
         # B*T x C
         queries = queries.contiguous().view(-1, queries.size(-1))
 
+        queries_device = queries.device
+        queries_dtype = queries.dtype
+
         # B*T x K
         distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
+        del queries
 
-        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
+        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries_device)
         tgt_idx = tgt_idx.view(bsz, seq_len, -1)
 
         # distance and queries should have the same device
-        distance = torch.from_numpy(distance).to(queries.device)
+        distance = torch.from_numpy(distance).to(queries_device)
         distance = distance.view(bsz, seq_len, -1)
 
         value_count = self.get_value_count(tgt_idx)
@@ -217,7 +225,7 @@ class AdaptiveKnnSearch(KnnSearch):
         del value_count
 
         # in case of mix precision training
-        meta_k_network_input = meta_k_network_input.type_as(queries)
+        meta_k_network_input = meta_k_network_input.type(queries_dtype)
 
         # B x T x (R_k+1)
         p_meta = self.meta_k_network(meta_k_network_input)
