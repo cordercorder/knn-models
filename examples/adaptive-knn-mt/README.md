@@ -6,7 +6,7 @@
 This page provides instructions on how to reproduce Adaptive kNN-MT with kNN-models.
 We use the [multi-domain parallel corpus](https://github.com/roeeaharoni/unsupervised-domain-clusters) 
 of German-English as an example and mainly focus on the IT domain on this page, 
-which is the same as the [example page on reproducing kNN-MT](../knnmt/RELEASE.md).
+which is the same as the [example page on reproducing kNN-MT](../knnmt/README.md).
 
 
 **It is worth noting that there is no difference in these procedures including 

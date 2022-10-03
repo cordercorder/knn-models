@@ -10,7 +10,7 @@
 </p>
 
 ## What's New
-- 2022/10/04 kNN-models is publicly available.
+- 2022/10/04 kNN-models is publicly available
 
 ## Overview
 kNN-models is a *k*-nearest neighbor augmented sequence modeling toolkit implemented based on [Fairseq](https://github.com/facebookresearch/fairseq). 
@@ -29,10 +29,10 @@ Main features:
 
 The repository contains the reference implementation of following papers (sorted by publication date):
  - [Efficient Cluster-Based k-Nearest-Neighbor Machine Translation (ACL 2022)](https://aclanthology.org/2022.acl-long.154.pdf)
- - [Adaptive Nearest Neighbor Machine Translation (ACL 2021)](examples/adaptive-knn-mt/RELEASE.md)
+ - [Adaptive Nearest Neighbor Machine Translation (ACL 2021)](examples/adaptive-knn-mt/README.md)
  - [Efficient Nearest Neighbor Language Models (EMNLP 2021)](https://aclanthology.org/2021.emnlp-main.461.pdf)
- - [Nearest Neighbor Machine Translation (ICLR 2021)](examples/knnmt/RELEASE.md)
- - [Generalization through Memorization: Nearest Neighbor Language Models (ICLR 2020)](examples/knnlm/RELEASE.md)
+ - [Nearest Neighbor Machine Translation (ICLR 2021)](examples/knnmt/README.md)
+ - [Generalization through Memorization: Nearest Neighbor Language Models (ICLR 2020)](examples/knnlm/README.md)
 
 
 ## Requirements and Installation
