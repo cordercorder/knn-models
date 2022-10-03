@@ -323,7 +323,7 @@ available in the case of batch size set to 400):
 
 
 The generation speed (token/s) of kNN-models on a server with 8 NVIDIA GeForce GTX TITAN GPU (24GB), 
-2 Intel Xeon CPU E5-2680 CPUs, and 256 GB of RAM is presented below:
+2 Intel Xeon E5-2680 CPUs, and 256 GB of RAM is presented below:
 <table>
     <tr>
         <th>Batch Size</th>
