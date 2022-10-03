@@ -10,12 +10,18 @@ with open(os.path.join("knn_models", "version.txt"), mode="r", encoding="utf-8")
     version = f_in.read()
 
 
+with open("README.md") as f:
+    readme = f.read()
+
+
 if __name__ == "__main__":
     setuptools.setup(
         name="knn_models",
         version=version,
         description=["k-Nearest Neighbor Augmented Sequence-to-Sequence Toolkit"],
         url="https://github.com/cordercorder/knn-models",
+        long_description=readme,
+        long_description_content_type="text/markdown",
         install_requires=install_requires,
         packages=[
             "knn_models",
