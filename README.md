@@ -47,6 +47,15 @@ cd knn-models
 pip install -e ./
 ```
 
+
+Note that `pip install -e ./` will check the packages in the Python environment to resolve the dependencies specified 
+in `requirements.txt`. However, [Faiss](https://github.com/facebookresearch/faiss) installed 
+through `conda` can not be identified by `pip`, which will result in the redundant 
+[Faiss](https://github.com/facebookresearch/faiss) installation from PIP source. If you are pretty sure that 
+all the packages required by this repository are installed well, you can run `python setup.py develop` to install 
+kNN-models instead.
+
+
 ## Getting Started
 
 We try to make the implementation independent of the model architecture during developing this repository. Consequently, 
@@ -154,7 +163,7 @@ the hardware environment, we performed each experiment 5 times and reported the 
 standard deviation of the generation speed on two different servers respectively.
 
 
-The generation speed (token/s) of kNN-models on a server with 8 NVIDIA Tesla P100 GPU (16GB), 
+The generation speed (token/s) of kNN-models on a server with 8 NVIDIA Tesla P100 GPUs (16GB), 
 2 Intel Xeon Gold 6240 CPUs, and 256 GB of RAM is presented below (as there are sentences with 
 more than 400 tokens in the test sets of medical and law domains, the generation speed is not 
 available in the case of batch size set to 400):
@@ -321,7 +330,7 @@ available in the case of batch size set to 400):
 </table>
 
 
-The generation speed (token/s) of kNN-models on a server with 8 NVIDIA GeForce GTX TITAN GPU (24GB), 
+The generation speed (token/s) of kNN-models on a server with 8 NVIDIA GeForce GTX TITAN GPUs (24GB), 
 2 Intel Xeon E5-2680 CPUs, and 256 GB of RAM is presented below:
 <table>
     <tr>
