@@ -4,7 +4,7 @@
 
 
 This page provides instructions on how to reproduce kNN-LM with kNN-models, taking 
-Wikitext-103 as example.
+Wikitext-103 as an example.
 
 
 ## Preprocess the data

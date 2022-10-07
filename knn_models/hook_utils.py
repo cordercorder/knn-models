@@ -65,4 +65,4 @@ class DimReduceForwardHook(ForwardHook):
         
         collected_output = self.transform(collected_output)
 
-        self.collected_outputs.append(collected_output)
+        self.collected_outputs.append(collected_output.detach())

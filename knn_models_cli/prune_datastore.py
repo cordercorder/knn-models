@@ -126,6 +126,8 @@ def cli_main():
         )
     
     elif args.method == "cluster_based_pruning":
+        assert 0 < args.sample_rate < 1, "sample_rate should be in the range of (0, 1)"
+
         cluster_based_pruning(
             args.datastore,
             args.datastore_size,

@@ -176,6 +176,7 @@ num_neighbors="selected num_neighbors"
 temperature="selected temperature"
 
 knn_models=/path/to/knn_models
+multi_domin_corpus=/path/to/multi-domin-corpus
 data_bin=/path/to/multi-domin-data-bin/${domain}
 datastore=/path/to/multi-domin-datastore/${domain}
 datastore_size=`count_tokens -d ${data_bin}/train.de-en.en`

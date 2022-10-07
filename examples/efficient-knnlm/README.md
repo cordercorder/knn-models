@@ -5,8 +5,8 @@
 
 The paper [Efficient Nearest Neighbor Language Models](https://aclanthology.org/2021.emnlp-main.461.pdf) 
 proposes to apply Greedy Merging and PCA to the datastore to reduce the inference overhead introduced by the 
-retrieval operation. We provides instructions on how to use them with kNN-models on this page, taking 
-Wikitext-103 as example.
+retrieval operation. We provide instructions on how to use them with kNN-models on this page, taking 
+Wikitext-103 as an example.
 
 
 ## Preprocess the data
@@ -47,7 +47,7 @@ Generate the datastore with the pre-trained language model.
 Since the optimal intermediate hidden states that serve as the 
 datastore keys for wikitext-103 dataset on language modeling task 
 are the FFN input after layer norm according to ablation experiments 
-in the original paper, we set the captured module to the layer norm 
+in the paper, we set the captured module to the layer norm 
 before FFN of the last layer (`--module-to-capture "layers[-1].final_layer_norm"`). 
 **Note that this step will consume about 200GB of disk space. Please 
 ensure there is enough free disk space before running this.**
@@ -114,7 +114,7 @@ Due to the memory constraint (a server with 256 GB RAM), we only randomly
 sample 40000000 keys to train the Faiss index. The number of sampled keys
 can be adjusted according to the hardware environment. This step will 
 construct `IndexIVFPQ` with Faiss and save it as a file named `faiss.index` 
-to the `datastore` directory. 
+to the `transformed_datastore` directory. 
 
 ``` bash
 transformed_datastore=/path/to/transformed-datastore
@@ -135,7 +135,7 @@ build_faiss_index \
 
 
 ## Prune datastore
-Applying greedy merging to prune redundant records in the datastore:
+Apply greedy merging to prune redundant records in the datastore:
 
 ``` bash
 transformed_datastore=/path/to/transformed-datastore
