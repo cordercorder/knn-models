@@ -56,20 +56,11 @@ class TranslationKnnTask(TranslationTask):
         model.get_normalized_probs = partial(get_normalized_probs, self, model)
         return model
 
-
-
-    #TODO  is it a good idea to build index here?
-    def train_step(self, sample, model, criterion, optimizer, update_num, ignore_grad=False):
-        
-        if self.cfg.knn_config.use_sentence_constraint:
-            self.knn_search.setup_sentence_search(sample)
-        super().train_step(sample, model, criterion, optimizer, update_num, ignore_grad)
     
     def inference_step(
         self, generator, models, sample, prefix_tokens=None, constraints=None
     ):
         if self.cfg.knn_config.use_sentence_constraint:
             self.knn_search.setup_sentence_search(sample)
-        super().inference_step(generator, models, sample, prefix_tokens, constraints)
+        return super().inference_step(generator, models, sample, prefix_tokens, constraints)
     
-

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import math
@@ -5,6 +6,7 @@ import faiss
 import torch
 import logging
 import numpy as np
+import time
 
 from torch import Tensor
 from fairseq import utils
@@ -66,6 +68,30 @@ class SentenceSearch:
         self.es_connection.es_create_datasetore(self.cfg.index_name, source_data_path, target_data_path)
 
 
+        if not self.cfg.sentence_load_single:
+            id2location_file = open(self.cfg.datastore + '/id2location.json', 'r')
+            self.id2location = json.load(id2location_file)
+            id2location_file.close()
+
+            # NOTE similar to 'load_keys'. Here might need a lot memory.
+            datastore_keys_path = os.path.join(self.cfg.datastore, "keys.npy")
+            keys_dtype = np.float32 if self.cfg.keys_dtype == "fp32" else np.float16
+            logger.info(f'Using sentence retrieval and load keys. Please make sure set the right datasetore_size ')
+            logger.info(f"Loading datastore keys from {datastore_keys_path}")
+            self.sentence_retrieval_keys = np.memmap(
+                datastore_keys_path, 
+                dtype=keys_dtype, 
+                mode="r", 
+                shape=(self.cfg.datastore_size, self.cfg.keys_dimension)
+            )
+            datastore_values_path = os.path.join(self.cfg.datastore, "values.npy")
+            self.sentence_retrieval_values = np.memmap(
+                datastore_values_path, 
+                dtype=np.int64,
+                mode="r",
+                shape=(self.cfg.datastore_size, )
+            )
+
     def build_sentence_index(self, sample):
         batch_body = []
 
@@ -83,11 +109,15 @@ class SentenceSearch:
                 }
             ]
             batch_body.extend(cur_body)
+        
+        start_time = time.time()
+        batch_result, _ = self.es_connection.query_index(self.cfg.index_name, batch_body)
+        logger.info(f'query time:{time.time() - start_time}')
 
-        batch_result, batch_ids = self.es_connection.query_index(self.cfg.index_name, batch_body)
-
-        # TODO.  can use rouge_score to rerank?
-        if self.cfg.sentence_use_rerank:
+        start_time = time.time()
+        batch_ids = set()
+        # TODO. can use rouge_score to rerank?
+        if self.cfg.use_sentence_rerank:
             try:
                 from rapidfuzz import process
                 from rapidfuzz.distance.Levenshtein import normalized_similarity
@@ -103,47 +133,65 @@ class SentenceSearch:
                         scorer=normalized_similarity,
                         limit=self.cfg.sentence_final_size,
                     )
+                
+                for rerank_item in rerank_result:
+                    batch_ids.add(int(result[rerank_item[-1]][-1]))    
         else:
-            # TODO. we should use batch
+            try:
+                assert self.cfg.sentence_retrieval_size == self.cfg.sentence_final_size
+            except AssertionError:
+                logger.info('if use-sentence-rerank == False. please set sentence-retrieval-size == sentence-final-size.')
             for cur_index, result in enumerate(batch_result):
-                src_tokens = sample['net_input']['src_tokens'][cur_index]
+                for index, item in enumerate(result):
+                    if index >= self.cfg.sentence_final_size:
+                        break
+                    batch_ids.add(int(item[-1]))
 
         offset = 0
         batch_feature_lengthes = sum([len(self.sentence_retrieval_data[id]) for id in batch_ids])
         batch_keys = np.zeros([batch_feature_lengthes, self.cfg.keys_dimension], dtype=self.keys_dtype)
         batch_values = np.zeros([batch_feature_lengthes,], dtype=np.int64)
 
-        for cur_id in batch_ids:
-            cur_key_path = self.cfg.datastore + f'/keys_{cur_id}.npy'
-            cur_value_path = self.cfg.datastore + f'/values_{cur_id}.npy'
-            cur_length = len(self.sentence_retrieval_data[cur_id])
-            cur_keys = np.memmap(
-                cur_key_path, 
-                dtype=self.keys_dtype, 
-                mode="r", 
-                shape=(cur_length, self.cfg.keys_dimension)
-            )
-            # TODO. seems equal to self.sentence_retrieval_data[cur_id]
-            cur_values = np.memmap(
-                cur_value_path,
-                dtype=np.int64,
-                mode="r",
-                shape=(cur_length, )
-            )
-            batch_keys[offset: offset + cur_length] = cur_keys
-            batch_values[offset: offset + cur_length] = cur_values
-            offset += cur_length
+        if self.cfg.sentence_load_single:
+            for cur_id in batch_ids:
+                cur_key_path = self.cfg.datastore + f'/keys_{cur_id}.npy'
+                cur_value_path = self.cfg.datastore + f'/values_{cur_id}.npy'
+                cur_length = len(self.sentence_retrieval_data[cur_id])
+                cur_keys = np.memmap(
+                    cur_key_path, 
+                    dtype=self.keys_dtype, 
+                    mode="r", 
+                    shape=(cur_length, self.cfg.keys_dimension)
+                )
+                # TODO. seems equal to self.sentence_retrieval_data[cur_id]
+                cur_values = np.memmap(
+                    cur_value_path,
+                    dtype=np.int64,
+                    mode="r",
+                    shape=(cur_length, )
+                )
+                batch_keys[offset: offset + cur_length] = cur_keys
+                batch_values[offset: offset + cur_length] = cur_values
+                offset += cur_length
+        else:
+            for cur_id in batch_ids:
+                start_location, end_location = self.id2location[str(cur_id)]
+                cur_length = end_location - start_location
+                batch_keys[offset: offset + cur_length] = self.sentence_retrieval_keys[start_location: end_location]
+                batch_values[offset: offset + cur_length] = self.sentence_retrieval_values[start_location: end_location]
+                offset += cur_length
 
+        if self.keys_dtype == np.float16:
+            batch_keys = batch_keys.astype(np.float32)
         self.batch_keys = torch.from_numpy(batch_keys).to(self.cfg.knn_device_id[0])
         batch_values = torch.from_numpy(batch_values).to(self.cfg.knn_device_id[0])
 
         # TODO should also build datastore_value_weights here?
         batch_values_weights = None
+        logger.info(f'set key time:{time.time() - start_time}')
         return batch_values, batch_values_weights
 
     def search(self, queries, num_neighbors):
-        # NOTE 
-        queries = queries.to(self.batch_keys.dtype).detach()
         norms_xq = (queries ** 2).sum(axis=1)
         norms_xb = (self.batch_keys ** 2).sum(axis=1)
         distances = norms_xq.reshape(-1, 1) + norms_xb -2 * queries @ self.batch_keys.T 
@@ -304,6 +352,7 @@ class KnnSearch:
         
         distance = utils.softmax(distance, dim=-1)
 
+        distance.mul_(self.cfg.lambda_value)
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": self.cfg.lambda_value}
 
 
@@ -347,15 +396,21 @@ class AdaptiveKnnSearch(KnnSearch):
         # B*T x C
         queries = queries.contiguous().view(-1, queries.size(-1))
 
-        # B*T x K
-        distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
+        if self.cfg.use_sentence_constraint:
+            distance, idx = self.index.search(queries, self.cfg.num_neighbors)
+            tgt_idx = self.datastore_values[idx]
+            tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+            distance = distance.view(bsz, seq_len, -1)
+        else:
+            # B*T x K
+            distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
 
-        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
-        tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+            tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries.device)
+            tgt_idx = tgt_idx.view(bsz, seq_len, -1)
 
-        # distance and queries should have the same device
-        distance = torch.from_numpy(distance).to(queries.device)
-        distance = distance.view(bsz, seq_len, -1)
+            # distance and queries should have the same device
+            distance = torch.from_numpy(distance).to(queries.device)
+            distance = distance.view(bsz, seq_len, -1)
 
         value_count = self.get_value_count(tgt_idx)
         meta_k_network_input = torch.cat([distance, value_count.float()], dim=2)
@@ -447,7 +502,7 @@ def get_normalized_probs(
     lambda_value = search_results["lambda_value"]
 
     mt_prob.mul_(1.0 - lambda_value)
-    mt_prob.scatter_add_(dim=2, index=search_results["tgt_idx"], src=search_results["knn_prob"].mul_(lambda_value))
+    mt_prob.scatter_add_(dim=2, index=search_results["tgt_idx"], src=search_results["knn_prob"])
 
     if log_probs:
         mt_prob.log_()

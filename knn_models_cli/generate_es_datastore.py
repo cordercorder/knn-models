@@ -141,28 +141,6 @@ def main(cfg: DictConfig):
         keys_dimension = saved_cfg.model.decoder_embed_dim
     
 
-    #! previous datastore creation. 
-    # datastore_keys_path = os.path.join(cfg.task.knn_config.datastore, "keys.npy")
-    # datastore_values_path = os.path.join(cfg.task.knn_config.datastore, "values.npy")
-
-    # if os.path.isfile(datastore_keys_path):
-    #     logger.warning(f"{datastore_keys_path} already exists! It will be overwritten!")
-    
-    # if os.path.isfile(datastore_values_path):
-    #     logger.warning(f"{datastore_values_path} already exists! It will be overwritten!")
-
-    # datastore_keys = np.memmap(
-    #     datastore_keys_path, 
-    #     dtype=keys_dtype, 
-    #     mode="w+", 
-    #     shape=(cfg.task.knn_config.datastore_size, keys_dimension)
-    # )
-    # datastore_values = np.memmap(
-    #     datastore_values_path,
-    #     dtype=np.int64,
-    #     mode="w+",
-    #     shape=(cfg.task.knn_config.datastore_size, )
-    # )
     # 
     # number of saved tokens in the datastore
     num_saved_tokens = 0

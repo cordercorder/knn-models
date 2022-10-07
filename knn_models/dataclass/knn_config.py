@@ -152,6 +152,20 @@ class BaseKnnConfig(FairseqDataclass):
         }
     )
 
+    sentence_load_single: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to load keys individual"
+        }
+    )
+
+    use_sentence_rerank: bool = field(
+        default=False,
+        metadata={
+            "help": "whether to use fuzz-rerank. (defult use rapidfuzz)"
+        }
+    )
+
     sentence_retrieval_size: int = field(
         default=10,
         metadata={
@@ -159,17 +173,10 @@ class BaseKnnConfig(FairseqDataclass):
         }
     )
 
-    sentence_use_rerank: bool = field(
-        default=False,
-        metadata={
-            "help": "whether to use fuzz-rerank. (defult use rapidfuzz)"
-        }
-    )
-
     sentence_final_size: int = field(
         default=10,
         metadata={
-            "help": "if set sentence_use_rerank = True. rerank the retrieval sentence and save the top-(sentence-final-size)."
+            "help": "if set erank = True. rerank the retrieval sentence and save the top-(sentence-final-size)."
         }
     )
 

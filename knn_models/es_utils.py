@@ -132,13 +132,6 @@ class Elastic(object):
         for current_id, (source, target) in enumerate(zip(total_source, total_target)):
 
             # TODO should we also remove the lines that removed during fairseq-preprocess? (if not, es may get data not appear in the fairseq-data.) 
-            # source_length = len(source.strip().split(' ')) 
-            # target_length = len(target.strip().split(' '))
-            # if source_length > self.args.max_source_length \
-            #     or  target_length > self.args.max_target_length:
-            #     logger.info(f'come to max position (source: {source_length}. target: {target_length}). drop it!')
-            #     total_remove += 1
-            #     continue
             
             document = {
                 '_op_type': 'create',
@@ -203,6 +196,7 @@ class Elastic(object):
                     temp2_result = []
                     temp2_result.append(item2['_source'][f'{self.source_lang}_data'])
                     temp2_result.append(item2['_source'][f'{self.target_lang}_data'])
+                    temp2_result.append(item2['_id'])
                     final_ids.add(int(item2['_id']))
                     temp1_result.append(temp2_result)
 

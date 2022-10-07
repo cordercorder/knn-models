@@ -91,6 +91,26 @@ class TranslationAdaptiveKnnTask(TranslationTask):
 
         return meta_k_network
 
+    #TODO  is it a good idea to build index here?
+    def train_step(self, sample, model, criterion, optimizer, update_num, ignore_grad=False):
+        
+        if self.cfg.knn_config.use_sentence_constraint:
+            self.knn_search.setup_sentence_search(sample)
+        return super().train_step(sample, model, criterion, optimizer, update_num, ignore_grad)
+    
+    def valid_step(self, sample, model, criterion):
+        if self.cfg.knn_config.use_sentence_constraint:
+            self.knn_search.setup_sentence_search(sample)
+        return super().valid_step(sample, model, criterion)
+
+    def inference_step(
+        self, generator, models, sample, prefix_tokens=None, constraints=None
+    ):
+        if self.cfg.knn_config.use_sentence_constraint:
+            self.knn_search.setup_sentence_search(sample)
+        return super().inference_step(generator, models, sample, prefix_tokens, constraints)
+    
+
 
 def load_state_dict(
     model,
