@@ -162,7 +162,7 @@ ln -s ${datastore}/4_gram_values_probs.npy ${transformed_datastore}/4_gram_value
 
 
 ## Prune datastore (optional)
-The script applies cluster-based pruning strategy to the datastore. `sample_rate` denotes the proportion 
+The script below applies cluster-based pruning strategy to the datastore. `sample_rate` denotes the proportion 
 of entries to keep in each n-gram phrase group clustered by translation cost. It should be in the range 
 of (0, 1). The pruned datastore will be saved to `pruned_datastore`. Note that this step is optional, 
 you can skip it and move to the next step.
