@@ -63,6 +63,7 @@ class DimReduceForwardHook(ForwardHook):
         else:
             collected_output = output.detach()
         
-        collected_output = self.transform(collected_output)
+        with torch.no_grad():
+            collected_output = self.transform(collected_output)
 
-        self.collected_outputs.append(collected_output.detach())
+        self.collected_outputs.append(collected_output)
