@@ -11,7 +11,7 @@ def _get_ngram_freq(input, output, n):
         tokens = tokens.strip()
         tokens = tokens.split()
         num_tokens = len(tokens)
-        for i in range(0, num_tokens - n):
+        for i in range(0, num_tokens - n + 1):
             ngram = tuple(tokens[i: i + n])
             counter[ngram] = counter.get(ngram, 0) + 1
     
