@@ -6,3 +6,4 @@ __pycache__/
 /jupyter/
 /experiments/
 /experiments_scripts/
+/knn_models.egg-info/
