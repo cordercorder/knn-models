@@ -68,6 +68,7 @@ def main(args: Namespace):
 
         prev_idx = current_idx
     
+    merged_datastore_keys.flush()
     merged_datastore_values.flush()
 
     logger.info(f"Merged datastore size: {merged_datastore_size}")

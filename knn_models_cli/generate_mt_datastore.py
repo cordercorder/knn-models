@@ -28,13 +28,6 @@ logging.basicConfig(
 logger = logging.getLogger("knn_models_cli.generate_mt_datastore")
 
 
-def get_symbols_to_strip_from_output(generator):
-    if hasattr(generator, "symbols_to_strip_from_output"):
-        return generator.symbols_to_strip_from_output
-    else:
-        return {generator.eos}
-
-
 def get_4_gram_values(target):
     # target shape: B x T
     bsz = target.size(0)
