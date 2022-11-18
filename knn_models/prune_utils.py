@@ -284,7 +284,7 @@ def cluster_based_pruning(
     non_padding_mask = datastore_4_gram_values != -1
 
     # datastore_size x 4
-    log_4_gram_values_probs = -np.log(np.where(non_padding_mask, datastore_4_gram_values_probs, 1e-19))
+    log_4_gram_values_probs = -np.log(np.where(non_padding_mask, datastore_4_gram_values_probs, 1e-5))
     del non_padding_mask
 
     # datastore_size x n_gram
@@ -304,11 +304,37 @@ def cluster_based_pruning(
 
     datastore_n_gram_values = datastore_4_gram_values[:, : n_gram]
 
+    datastore_n_gram_values = np.where(datastore_n_gram_values == -1, 0, datastore_n_gram_values)
+    hash_weight = np.array([0] + [np.exp(i + 1) for i in range(n_gram - 1)])
+    hash_weight = np.expand_dims(hash_weight, axis=1)
+
+    # n_gram: e.g., [30, 23, 40]
+    # -> [30] and [23, 40]
+    # -> [30] and [23 * exp(1) + 40 * exp(2) = 358.0827]
+    # -> [30] and [358.0827 scaled to 0.3580827]
+    # ->  30 + 0.3580827 = 30.3580827
+    # the integer part is the final token vocab id
+    datastore_n_gram_values_hash = np.matmul(datastore_n_gram_values, hash_weight).squeeze(1)
+    datastore_n_gram_values_hash = datastore_n_gram_values_hash / \
+            np.power(
+                10, 
+                np.log10(
+                    np.where(
+                        datastore_n_gram_values_hash == 0, 
+                        1, 
+                        datastore_n_gram_values_hash
+                    )
+                ).astype(np.int64) 
+                + 1
+            )
+    
+    datastore_n_gram_values_hash = datastore_n_gram_values[:, 0] + datastore_n_gram_values_hash
+    del datastore_n_gram_values
+
     logger.info("Start collecting indice of each n-gram")
     # ngram to its indice
     ngram_to_idx = {}
-    for idx, ngram in enumerate(datastore_n_gram_values):
-        ngram = tuple(ngram)
+    for idx, ngram in enumerate(datastore_n_gram_values_hash):
         ngram_to_idx.setdefault(ngram, []).append(idx)
     
     for ngram, idxs in ngram_to_idx.items():
@@ -319,6 +345,12 @@ def cluster_based_pruning(
 
     for ngram, idxs in ngram_to_idx.items():
         ngram_translation_cost = translation_cost[idxs]
+
+        sample_num = max(minimum_sample_num, int(idxs.shape[0] * sample_rate))
+
+        if idxs.shape[0] <= sample_num:
+            # do not prune it due to its sparseness
+            continue
 
         if ngram_translation_cost.shape[0] <= 10000:
             # affinity greedy searching
@@ -354,7 +386,7 @@ def cluster_based_pruning(
             
             # uniform pruning
             for i, cluster_idx in enumerate(split_clusters):
-                sample_num = max(minimum_sample_num, int(cluster_idx.shape[0] * sample_rate))
+                sample_num = max(min(minimum_sample_num, cluster_idx.shape[0]), int(cluster_idx.shape[0] * sample_rate))
                 
                 if sample_num >= cluster_idx.shape[0]:
                     continue
@@ -390,7 +422,7 @@ def cluster_based_pruning(
                     continue
 
                 cluster_idx = np.asarray(cluster_idx)
-                sample_num = max(minimum_sample_num, int(cluster_idx.shape[0] * sample_rate))
+                sample_num = max(min(minimum_sample_num, cluster_idx.shape[0]), int(cluster_idx.shape[0] * sample_rate))
 
                 if sample_num < cluster_idx.shape[0]:
                     cluster_idx = rng.choice(cluster_idx, sample_num, replace=False)
@@ -398,7 +430,7 @@ def cluster_based_pruning(
                 remain_ngram_idx.append(cluster_idx)
             
             # add the isolated nodes
-            remain_ngram_idx.extend(isolated_nodes)
+            remain_ngram_idx.extend(np.asarray(isolated_nodes))
             del isolated_nodes
         
             remain_ngram_idx = np.concatenate(remain_ngram_idx, axis=0)

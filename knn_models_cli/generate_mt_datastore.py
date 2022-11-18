@@ -29,13 +29,6 @@ logging.basicConfig(
 logger = logging.getLogger("knn_models_cli.generate_mt_datastore")
 
 
-def get_symbols_to_strip_from_output(generator):
-    if hasattr(generator, "symbols_to_strip_from_output"):
-        return generator.symbols_to_strip_from_output
-    else:
-        return {generator.eos}
-
-
 def get_4_gram_values(target):
     # target shape: B x T
     bsz = target.size(0)
@@ -169,6 +162,7 @@ def main(cfg: DictConfig):
             logger.warning(f"{datastore_keys_path} already exists! It will be overwritten!")
         else:
             # do not overwrite the old datastore keys
+            logger.warning(f"{datastore_keys_path} already exists! Skip generate datastore keys!")
             generate_datastore_keys = False
     
     if os.path.isfile(datastore_values_path):
@@ -176,6 +170,7 @@ def main(cfg: DictConfig):
             logger.warning(f"{datastore_values_path} already exists! It will be overwritten!")
         else:
             # do not overwrite the old datastore values
+            logger.warning(f"{datastore_values_path} already exists! Skip generate datastore values!")
             generate_datastore_values = False
 
     if generate_datastore_keys:
@@ -341,7 +336,7 @@ def main(cfg: DictConfig):
     # number of tokens in the dataset
     num_total_tokens = 0
 
-    # whether to only only return features without applying output layer
+    # whether to only return features without applying output projection layer
     # only return features if there is no need to generate probabilities
     decoder_features_only = True if not generate_datastore_4_gram_values_probs else False
 

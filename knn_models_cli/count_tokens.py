@@ -3,7 +3,7 @@ import argparse
 from fairseq.data import data_utils
 
 
-def main():
+def cli_main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-bin-path", "-d", required=True, type=str)
     args = parser.parse_args()
@@ -13,4 +13,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    cli_main()

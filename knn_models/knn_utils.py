@@ -324,6 +324,8 @@ class KnnSearch:
         # B*T x C
         queries = queries.contiguous().view(-1, queries.size(-1))
 
+        queries_device = queries.device
+
         # B*T x K
         if self.cfg.use_sentence_constraint:
             distance, idx = self.index.search(queries, self.cfg.num_neighbors)
@@ -343,15 +345,16 @@ class KnnSearch:
         distance.neg_()
 
         if self.datastore_value_weights is not None:
-            weight = torch.from_numpy(self.datastore_value_weights[idx]).to(queries.device)
+            weight = torch.from_numpy(self.datastore_value_weights[idx]).to(queries_device)
             weight = weight.view(bsz, seq_len, -1)
             # following the original implementation in `Efficient Nearest Neighbor Language Models`
             distance.add_(weight.log_())
+            del weight
         
         distance.div_(self.cfg.temperature_value)
         
         distance = utils.softmax(distance, dim=-1)
-
+        
         distance.mul_(self.cfg.lambda_value)
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": self.cfg.lambda_value}
 
@@ -417,7 +420,7 @@ class AdaptiveKnnSearch(KnnSearch):
         del value_count
 
         # in case of mix precision training
-        meta_k_network_input = meta_k_network_input.type_as(queries)
+        meta_k_network_input = meta_k_network_input.type(queries_dtype)
 
         # B x T x (R_k+1)
         p_meta = self.meta_k_network(meta_k_network_input)

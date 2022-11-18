@@ -76,7 +76,7 @@ def get_parser():
                             help="contiguous sequence of n items")
         parser.add_argument("--translation-cost-threshold", type=float, default=1.5, 
                             help="translation cost threshold for clustering")
-        parser.add_argument("--sample-rate", type=float, default=0.3,
+        parser.add_argument("--sample-rate", type=float, default=0.9,
                             help="sample rate of datastore in each cluster")
         parser.add_argument("--minimum-sample-num", type=int, default=2,
                             help="minumum number of samples to get when adopt "
@@ -126,6 +126,8 @@ def cli_main():
         )
     
     elif args.method == "cluster_based_pruning":
+        assert 0 < args.sample_rate < 1, "sample_rate should be in the range of (0, 1)"
+
         cluster_based_pruning(
             args.datastore,
             args.datastore_size,

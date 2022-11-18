@@ -13,8 +13,14 @@ from fairseq.tasks.translation import (
 )
 from fairseq.tasks import register_task
 from fairseq.dataclass import FairseqDataclass
-from knn_models.dataclass import AdaptiveKnnConfig
-from knn_models.hook_utils import ForwardHook
+from knn_models.dataclass import (
+    AdaptiveKnnConfig,
+    DimReduceConfig,
+)
+from knn_models.hook_utils import (
+    ForwardHook,
+    DimReduceForwardHook,
+)
 from knn_models.knn_utils import (
     AdaptiveKnnSearch,
     get_captured_module,
@@ -29,6 +35,7 @@ logger = logging.getLogger(__name__)
 class TranslationAdaptiveKnnConfig(TranslationConfig):
     """config for adaptive nearest neighbor machine translation"""
     knn_config: AdaptiveKnnConfig = AdaptiveKnnConfig()
+    dim_reduce_config: DimReduceConfig = DimReduceConfig()
 
 
 @register_task("translation_adaptive_knn", dataclass=TranslationAdaptiveKnnConfig)
@@ -36,8 +43,12 @@ class TranslationAdaptiveKnnTask(TranslationTask):
     """task for nearest neighbor machine translation"""
     def __init__(self, cfg: TranslationAdaptiveKnnConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
-        self.forward_hook = ForwardHook()
         self.knn_search = AdaptiveKnnSearch(cfg.knn_config)
+
+        if cfg.dim_reduce_config.dim_reduce_method is None:
+            self.forward_hook = ForwardHook()
+        else:
+            self.forward_hook = DimReduceForwardHook(cfg.dim_reduce_config)
 
     def build_model(self, cfg: FairseqDataclass, from_checkpoint=False):
         model = super().build_model(cfg, from_checkpoint)
@@ -54,7 +65,7 @@ class TranslationAdaptiveKnnTask(TranslationTask):
         meta_k_network = self.build_meta_k_network()
         model.add_module("meta_k_network", meta_k_network)
 
-        # make the meta-k network of the model and knn_search shared with each other
+        # make the meta-k network in the model and knn_search shared with each other
         self.knn_search.meta_k_network = meta_k_network
 
         # rewrite `load_state_dict` function to successfully load the pretrained models when there are no meta-k networks in them
