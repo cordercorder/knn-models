@@ -7,3 +7,4 @@ __pycache__/
 /experiments/
 /experiments_scripts/
 /knn_models.egg-info/
+/examples/es_knnmt/

@@ -19,8 +19,8 @@ from knn_models.dataclass import (
     AdaptiveKnnConfig,
 )
 
-from knn_models.es_utils import (
-    Elastic
+from knn_models.es_knn_utils import (
+    ElasticKnn
 )
 from typing import Dict, List, Optional, Tuple
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class SentenceSearch:
 
-    def __init__(self, cfg: KnnConfig, connection: Elastic):
+    def __init__(self, cfg: KnnConfig, connection: ElasticKnn):
 
         self.cfg = cfg
         self.es_connection = connection
@@ -204,7 +204,7 @@ class KnnSearch:
         if not cfg.saving_mode:
             if self.cfg.use_sentence_constraint:
                 logger.info('use sentence constraint')
-                es_connection = Elastic(args=self.cfg)
+                es_connection = ElasticKnn(args=self.cfg)
                 self.index = SentenceSearch(self.cfg, es_connection) 
             else:
                 self.setup_knn_search()

@@ -73,9 +73,9 @@ def main(args: Namespace):
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--datastore", type=str, required=True, help="path to datastore directory")
-    parser.add_argument("--datastore-size", type=int, required=True, help="the number of tokens in datastore")
+    parser.add_argument("--datastore-size", type=int, required=True, help="number of tokens in datastore")
     parser.add_argument("--keys-dtype", type=str, choices=["fp16", "fp32"], default="fp16", help="keys dtype of the datastore")
-    parser.add_argument("--keys-dimension", required=True, type=int, help="the feature dimension of datastore keys")
+    parser.add_argument("--keys-dimension", required=True, type=int, help="feature dimension of datastore keys")
 
     parser.add_argument("--deduped-datastore", type=str, required=True, help="path to the deduped datastore directory")
     return parser
