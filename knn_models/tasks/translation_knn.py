@@ -55,12 +55,3 @@ class TranslationKnnTask(TranslationTask):
         # rewrite `get_normalized_probs` function to support kNN augmented NMT
         model.get_normalized_probs = partial(get_normalized_probs, self, model)
         return model
-
-    
-    def inference_step(
-        self, generator, models, sample, prefix_tokens=None, constraints=None
-    ):
-        if self.cfg.knn_config.use_sentence_constraint:
-            self.knn_search.setup_sentence_search(sample)
-        return super().inference_step(generator, models, sample, prefix_tokens, constraints)
-    

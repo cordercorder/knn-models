@@ -2,7 +2,6 @@ import ast
 import logging
 import os
 import sys
-import json
 from argparse import Namespace
 from itertools import chain
 
@@ -151,9 +150,6 @@ def main(cfg: DictConfig):
     # whether to generate the datastore values
     generate_datastore_values = True
 
-    # whether to generate id-location files.
-    generate_id2locations = True
-
     datastore_keys_path = os.path.join(cfg.task.knn_config.datastore, "keys.npy")
     datastore_values_path = os.path.join(cfg.task.knn_config.datastore, "values.npy")
 
@@ -193,9 +189,6 @@ def main(cfg: DictConfig):
             mode="w+", 
             shape=(cfg.task.knn_config.datastore_size, keys_dimension)
         )
-        if generate_id2locations:
-            id2locations = {}
-            
     else:
         datastore_keys = None
 
@@ -465,16 +458,6 @@ def main(cfg: DictConfig):
         if generate_datastore_keys:
             collected_keys = collected_keys.cpu().numpy().astype(keys_dtype)
             datastore_keys[num_saved_tokens: num_saved_tokens + effective_ntokens] = collected_keys
-            
-            if generate_id2locations:
-                # save the feature location of every sample.
-                tmp_target = sample["target"]
-                tmp_target = tmp_target.ne(pad_idx)
-                target_lengths = torch.sum(tmp_target, dim=1)
-                tmp_location = num_saved_tokens
-                for index, id in enumerate(sample['id']):
-                    id2locations[id.item()] = (tmp_location, tmp_location + target_lengths[index].item())
-                    tmp_location += target_lengths[index].item()
         
         if generate_datastore_values:
             target = target.cpu().numpy().astype(np.int64)
@@ -495,10 +478,6 @@ def main(cfg: DictConfig):
 
         progress.log({"wps": round(wps_meter.avg)})
 
-    if generate_id2locations:
-        id2locations_file = open(os.path.join(cfg.task.knn_config.datastore, 'id2location.json'), 'w')
-        json.dump(id2locations, id2locations_file)
-        id2locations_file.close()
     # Flush the memmap instance to write the changes to the file
     if datastore_keys is not None:
         datastore_keys.flush()
