@@ -99,13 +99,19 @@ class TranslationEsKnnTask(TranslationTask):
         del queries
 
         # convert retrieved source texts to tensor
-        retrieved_src_tokens = convert_retrieved_text_to_tensor(retrieved_source_text, self.source_dictionary)
+        retrieved_src_tokens = convert_retrieved_text_to_tensor(
+            retrieved_source_text, 
+            self.source_dictionary
+        )
         del retrieved_source_text
 
         retrieved_src_tokens_length = [t.numel() for t in retrieved_src_tokens]
 
         # convert retrieved target texts to tensor
-        retrieved_tgt_tokens = convert_retrieved_text_to_tensor(retrieved_target_text, self.target_dictionary)
+        retrieved_tgt_tokens = convert_retrieved_text_to_tensor(
+            retrieved_target_text, 
+            self.target_dictionary
+        )
         del retrieved_target_text
 
         retrieved_tgt_tokens_length = [t.numel() for t in retrieved_tgt_tokens]
