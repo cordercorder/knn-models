@@ -1,5 +1,6 @@
 # kNN-models
 
+
 <p align="center">
     <a href="#implemented-papers">Implemented Papers</a> • 
     <a href="#requirements-and-installation">Requirements and Installation</a> • 
@@ -8,10 +9,15 @@
     <a href="#acknowledgements">Acknowledgements</a>
 </p>
 
+
 ## What's New
+
 - 2022/10/04 kNN-models is publicly available
+- 2022/11/20 Supported retrieving with [Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/8.5/elasticsearch-intro.html), please refer [examples/es_knnmt](examples/es_knnmt) folder for more details
+
 
 ## Overview
+
 kNN-models is a *k*-nearest neighbor augmented sequence modeling toolkit implemented based on [Fairseq](https://github.com/facebookresearch/fairseq). 
 It enhances the pre-trained neural sequence to sequence model by retrieving from the external memory without expensive retraining. 
 
@@ -19,7 +25,7 @@ Main features:
  - Fast and memory efficient (please see [benchmarks](#benchmarks) for details)
  - Provide reference implementation of various *k*-nearest neighbor augmented sequence modeling papers (please see [Implemented-papers](#implemented-papers) for details)
  - Compatible with most of the pre-trained models in [Fairseq](https://github.com/facebookresearch/fairseq) (although only the transformer model has been well tested yet, we plan to conduct experiments with other models in the future)
- - Support similarity search with [Faiss](https://github.com/facebookresearch/faiss) and [Elasticsearch](https://github.com/elastic/elasticsearch-py) (retrieving with [Elasticsearch](https://github.com/elastic/elasticsearch-py) is an upcoming feature, it is still underdeveloped at the [es branch](https://github.com/cordercorder/knn-models/tree/es) and will merge into the main branch in the foreseeable future)
+ - Support similarity search with [Faiss](https://github.com/facebookresearch/faiss) and [Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/8.5/elasticsearch-intro.html)
  - The [Faiss](https://github.com/facebookresearch/faiss) index can be placed on a GPU that is different from the one occupied by the model and sharded between multiple GPUs to avoid out of memory
  - The module which produces the intermediate hidden state to serve as datastore keys can be configured through command line arguments to adapt to the user's needs (it is the last layer in the decoder by default, please see the [BaseKnnConfig](https://github.com/cordercorder/knn-models/blob/main/knn_models/dataclass/knn_config.py#L78) for details)
  - Flexible configuration based on [Hydra](https://github.com/facebookresearch/hydra)
@@ -40,7 +46,7 @@ The detailed READMEs about how to reproduce them with kNN-models can be found in
 
 ## Requirements and Installation
 
-The repository is developed and tested on Python 3.10, PyTorch 1.10.0, Fairseq 0.12.1, and Faiss-gpu 1.7.2. 
+The repository is developed and tested on Python 3.10, PyTorch 1.10.0, Fairseq 0.12.1, Faiss-gpu 1.7.2, and Elasticsearch 8.5.0. 
 We recommend users keep the versions of these packages the same as ours to alleviate the compatibility issues, 
 even though other versions may also work.
 
@@ -53,11 +59,18 @@ pip install -e ./
 
 
 Note that `pip install -e ./` will check the packages in the Python environment to resolve the dependencies specified 
-in `requirements.txt`. However, [Faiss](https://github.com/facebookresearch/faiss) installed 
+in `requirements.txt`. However, [faiss-gpu](https://github.com/facebookresearch/faiss) installed 
 through `conda` can not be identified by `pip`, which will result in the redundant 
 [Faiss](https://github.com/facebookresearch/faiss) installation from PIP source. If you are pretty sure that 
-all the packages required by this repository are installed well, you can run `python setup.py develop` to install 
-kNN-models instead.
+all the packages required by this repository are installed well, you can delete `faiss-gpu>=1.7.2` in `requirements.txt` 
+and run `python setup.py develop` to install kNN-models instead.
+
+
+If you want to use [Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/8.5/elasticsearch-intro.html) 
+for *k*-nearest neighbor search rather than [Faiss](https://github.com/facebookresearch/faiss), please set up 
+[Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/8.5/elasticsearch-intro.html) following the 
+[instructions](https://www.elastic.co/guide/en/elasticsearch/reference/8.5/setup.html) first and then install 
+[elasticsearch-py](https://github.com/elastic/elasticsearch-py) through `pip install elasticsearch`.
 
 
 ## Getting Started
@@ -162,6 +175,7 @@ are presented below:
 
 
 ### Generation Speed
+
 As the generation speed usually varies between different runs and is highly dependent on 
 the hardware environment, we performed each experiment 5 times and reported the mean and 
 standard deviation of the generation speed on two different servers respectively.

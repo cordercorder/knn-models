@@ -3,10 +3,17 @@ import sys
 import logging
 import torch.nn.functional as F
 
-from elasticsearch import (
-    helpers,
-    Elasticsearch,
-)
+try:
+    from elasticsearch import (
+        helpers,
+        Elasticsearch,
+    )
+except ModuleNotFoundError:
+    _elasticsearch_is_installed = False
+else:
+    _elasticsearch_is_installed = True
+
+
 from typing import (
     Dict, 
     List, 
@@ -36,6 +43,9 @@ logger = logging.getLogger("knn_models_cli.es_knn_utils")
 
 class ElasticKnnSearch:
     def __init__(self, cfg):
+        assert _elasticsearch_is_installed, \
+            "Please install elasticsearch-py via `pip install elasticsearch`"
+
         self.client = Elasticsearch(
             cfg.hosts,
             ca_certs=cfg.ca_certs,

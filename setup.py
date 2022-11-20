@@ -41,6 +41,7 @@ if __name__ == "__main__":
                 "prune_datastore = knn_models_cli.prune_datastore:cli_main",
                 "reduce_datastore_dims = knn_models_cli.reduce_datastore_dims:cli_main",
                 "tune_knn_params = knn_models_cli.tune_knn_params:cli_main",
+                "es_knn_manager = knn_models_cli.es_knn_manager:cli_main"
             ]
         }
     )
