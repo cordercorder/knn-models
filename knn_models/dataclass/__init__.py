@@ -5,3 +5,6 @@ from .knn_config import (
 from .dim_reduce_config import (
     DimReduceConfig,
 )
+from .es_knn_config import (
+    EsKnnConfig,
+)

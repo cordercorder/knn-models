@@ -1,12 +1,21 @@
 import os
 import sys
 import logging
+import torch.nn.functional as F
 
-from typing import Iterable
 from elasticsearch import (
     helpers,
     Elasticsearch,
 )
+from typing import (
+    Dict, 
+    List, 
+    Tuple,
+    Iterable,
+    Optional, 
+)
+from torch import Tensor
+from fairseq import utils
 from itertools import zip_longest
 
 
@@ -25,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger("knn_models_cli.es_knn_utils")
 
 
-class ElasticKnn:
+class ElasticKnnSearch:
     def __init__(self, cfg):
         self.client = Elasticsearch(
             cfg.hosts,
@@ -117,7 +126,7 @@ class ElasticKnn:
         doc_count = info["indices"][index_name]["primaries"]["docs"]["count"]
         logger.info(f"Total document indexed {doc_count}")
 
-    def retrieve(self, index_name: str, queries: Iterable[str], num_neighbors: int, retrieve_source: bool):
+    def retrieve(self, queries: Iterable[str], index_name: str, size: int, retrieve_source: bool):
         searches = []
         for text in queries:
             searches.append(
@@ -134,7 +143,7 @@ class ElasticKnn:
                                 "source_text": text
                             }
                         },
-                        "size": num_neighbors
+                        "size": size
                     }
                 )
             else:
@@ -145,26 +154,124 @@ class ElasticKnn:
                                 "target_text": text
                             }
                         },
-                        "size": num_neighbors
+                        "size": size
                     }
                 )
 
         search_results = self.client.msearch(searches=searches)
 
-        source_text_neighbors = []
-        target_text_neighbors = []
+        retrieved_source_text = []
+        retrieved_target_text = []
         for responses in search_results["responses"]:
             hits = responses["hits"]["hits"]
 
-            source_text_neighbors_per_query = []
-            target_text_neighbors_per_query = []
+            retrieved_source_text_per_query = []
+            retrieved_target_text_per_query = []
 
             for neighbor in hits:
                 _source = neighbor["_source"]
-                source_text_neighbors_per_query.append(_source["source_text"])
-                target_text_neighbors_per_query.append(_source["target_text"])
+                retrieved_source_text_per_query.append(_source["source_text"])
+                retrieved_target_text_per_query.append(_source["target_text"])
 
-            source_text_neighbors.append(source_text_neighbors_per_query)
-            target_text_neighbors.append(target_text_neighbors_per_query)
+            retrieved_source_text.append(retrieved_source_text_per_query)
+            retrieved_target_text.append(retrieved_target_text_per_query)
 
-        return source_text_neighbors, target_text_neighbors
+        return retrieved_source_text, retrieved_target_text
+
+
+def convert_retrieved_text_to_tensor(retrieved_text, dictionary):
+    tokens = []
+    for retrieved_text_per_query in retrieved_text:
+        for line in retrieved_text_per_query:
+            tokens.append(
+                dictionary.encode_line(
+                    line=line,
+                    add_if_not_exist=False,
+                ).long()
+            )
+    
+    return tokens
+
+
+def get_normalized_probs(
+    task,
+    model,
+    net_output: Tuple[Tensor, Optional[Dict[str, List[Optional[Tensor]]]]],
+    log_probs: bool,
+    sample: Optional[Dict[str, Tensor]] = None,
+):
+    """Get normalized probabilities (or log probs) from a net's output."""
+
+    if hasattr(model.decoder, "adaptive_softmax") and model.decoder.adaptive_softmax is not None:
+        if sample is not None:
+            assert "target" in sample
+            target = sample["target"]
+        else:
+            target = None
+        mt_prob = model.decoder.adaptive_softmax.get_log_prob(net_output[0], target=target)
+        mt_prob.exp_()
+    else:
+        mt_prob = net_output[0]
+        mt_prob = utils.softmax(mt_prob, dim=-1)
+    
+    # T x B x C
+    collected_keys = task.forward_hook.collected_outputs[0]
+    task.forward_hook.clear()
+
+    # B x T x C
+    collected_keys = collected_keys.transpose(0, 1)
+    bsz, seq_len = collected_keys.size()[:2]
+
+    # B*T x C
+    collected_keys = collected_keys.contiguous().view(-1, collected_keys.size(2))
+
+    # N x C
+    datastore_keys = task.datastore_keys
+    # N
+    datastore_values = task.datastore_values
+
+    datastore_keys_norm = task.datastore_keys_norm
+
+    # ||X - Y||^2 = ||X||^2 + ||Y||^2 - 2 ||X|| * ||Y||
+    # B*T x 1
+    collected_keys_norm = collected_keys.pow(2).sum(1).unsqueeze(1)
+
+    # B*T x N
+    distance = collected_keys_norm + datastore_keys_norm - collected_keys.matmul(datastore_keys.T).mul(2)
+    del collected_keys_norm, collected_keys
+
+    # B*T x K
+    distance, idx = distance.topk(task.cfg.es_knn_config.num_neighbors, dim=1, largest=False)
+
+    # B x T x K
+    distance = distance.view(bsz, seq_len, -1)
+
+    temperature_value = task.cfg.es_knn_config.temperature_value
+    
+    # lambda = ReLU(1 - d0 / temperature)
+    # B x T
+    lambda_value = F.relu(1.0 - distance[:, :, 0].sqrt().div_(temperature_value))
+
+    distance.neg_()
+    distance.div_(temperature_value)
+    distance = utils.softmax(distance, dim=-1)
+
+    # B x T x 1
+    lambda_value.unsqueeze_(2)
+
+    distance.mul_(lambda_value)
+
+    # B*T x K
+    tgt_idx = datastore_values[idx]
+
+    tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+
+    mt_prob.mul_(1.0 - lambda_value)
+    del lambda_value
+
+    mt_prob.scatter_add_(dim=2, index=tgt_idx, src=distance)
+
+    if log_probs:
+        mt_prob.log_()
+
+    return mt_prob

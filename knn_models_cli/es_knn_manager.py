@@ -3,11 +3,11 @@ import json
 import argparse
 
 from argparse import Namespace
-from knn_models.es_knn_utils import ElasticKnn
+from knn_models.es_knn_utils import ElasticKnnSearch
 
 
 def build_datasetore(args: Namespace):
-    elastic_knn = ElasticKnn(args)
+    elastic_knn = ElasticKnnSearch(args)
     elastic_knn.create_index(args.index_name)
     elastic_knn.build_datasetore(
         args.index_name,
@@ -17,12 +17,12 @@ def build_datasetore(args: Namespace):
 
 
 def delete_index(args: Namespace):
-    elastic_knn = ElasticKnn(args)
+    elastic_knn = ElasticKnnSearch(args)
     elastic_knn.delete_index(args.index_name)
 
 
 def get_index(args: Namespace):
-    elastic_knn = ElasticKnn(args)
+    elastic_knn = ElasticKnnSearch(args)
     elastic_knn.get_index(args.index_name)
 
 
@@ -33,11 +33,11 @@ def retrieve(args: Namespace):
             text = text.strip()
             yield text
 
-    elastic_knn = ElasticKnn(args)
+    elastic_knn = ElasticKnnSearch(args)
     source_text_neighbors, target_text_neighbors = elastic_knn.retrieve(
-        args.index_name,
         query_generator(),
-        args.num_neighbors,
+        args.index_name,
+        args.size,
         args.retrieve_source
     )
 
@@ -73,6 +73,9 @@ def get_parser():
         default="https://localhost:9200", 
         help="https:ip/port"
     )
+
+    # please refer https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#elasticsearch-security-certificates
+    # for more details about the CA certificate
     parser.add_argument(
         "--ca-certs", 
         type=str, 
@@ -123,10 +126,10 @@ def get_parser():
             help="path to corpus to perform search. reading text from standard input by default"
         )
         parser.add_argument(
-            "--num-neighbors",
+            "--size",
             type=int,
             default=1,
-            help="number of neighbors to retrieve"
+            help="number of hits to return"
         )
         parser.add_argument(
             "--retrieve-source",
