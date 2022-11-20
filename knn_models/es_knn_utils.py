@@ -250,6 +250,10 @@ def get_normalized_probs(
     distance = collected_keys_norm + datastore_keys_norm - collected_keys.matmul(datastore_keys.T).mul(2)
     del collected_keys_norm, collected_keys
 
+    # there may be some distance small than 0 (e.g., 1e-5) due to numeric errors, 
+    # which results in inf in later computations
+    distance.clamp_(min=0.0)
+
     # B*T x K
     distance, idx = distance.topk(task.cfg.es_knn_config.num_neighbors, dim=1, largest=False)
 
