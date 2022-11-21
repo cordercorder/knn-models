@@ -172,27 +172,45 @@ class ElasticKnnSearch:
 
         retrieved_source_text = []
         retrieved_target_text = []
+        retrieved_text_ids = []
         for responses in search_results["responses"]:
             hits = responses["hits"]["hits"]
 
             retrieved_source_text_per_query = []
             retrieved_target_text_per_query = []
+            retrieved_text_ids_per_query = []
 
             for neighbor in hits:
                 _source = neighbor["_source"]
                 retrieved_source_text_per_query.append(_source["source_text"])
                 retrieved_target_text_per_query.append(_source["target_text"])
+                retrieved_text_ids_per_query.append(neighbor["_id"])
 
             retrieved_source_text.append(retrieved_source_text_per_query)
             retrieved_target_text.append(retrieved_target_text_per_query)
+            retrieved_text_ids.append(retrieved_text_ids_per_query)
 
-        return retrieved_source_text, retrieved_target_text
+        return retrieved_source_text, retrieved_target_text, retrieved_text_ids
 
 
-def convert_retrieved_text_to_tensor(retrieved_text, dictionary):
+def convert_retrieved_text_to_tensor(retrieved_text, retrieved_text_ids, dictionary):
     tokens = []
-    for retrieved_text_per_query in retrieved_text:
-        for line in retrieved_text_per_query:
+    retrieved_text_ids_set= set()
+
+    for retrieved_text_per_query, retrieved_text_ids_per_query in zip(
+        retrieved_text, 
+        retrieved_text_ids
+    ):
+        for line, retrieved_text_id in zip(
+            retrieved_text_per_query, 
+            retrieved_text_ids_per_query
+        ):  
+            # remove text with identical id in datastore
+            if retrieved_text_id in retrieved_text_ids_set:
+                continue
+            
+            retrieved_text_ids_set.add(retrieved_text_id)
+
             tokens.append(
                 dictionary.encode_line(
                     line=line,

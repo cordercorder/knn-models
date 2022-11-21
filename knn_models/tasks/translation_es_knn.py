@@ -90,7 +90,7 @@ class TranslationEsKnnTask(TranslationTask):
         del src_tokens
 
         # retrieve parallel sentence pairs according the the source sentences in sample
-        retrieved_source_text, retrieved_target_text = self.es_knn_search.retrieve(
+        retrieved_source_text, retrieved_target_text, retrieved_text_ids = self.es_knn_search.retrieve(
             queries,
             self.cfg.es_knn_config.index_name,
             self.cfg.es_knn_config.size,
@@ -101,6 +101,7 @@ class TranslationEsKnnTask(TranslationTask):
         # convert retrieved source texts to tensor
         retrieved_src_tokens = convert_retrieved_text_to_tensor(
             retrieved_source_text, 
+            retrieved_text_ids,
             self.source_dictionary
         )
         del retrieved_source_text
@@ -110,9 +111,10 @@ class TranslationEsKnnTask(TranslationTask):
         # convert retrieved target texts to tensor
         retrieved_tgt_tokens = convert_retrieved_text_to_tensor(
             retrieved_target_text, 
+            retrieved_text_ids, 
             self.target_dictionary
         )
-        del retrieved_target_text
+        del retrieved_target_text, retrieved_text_ids
 
         retrieved_tgt_tokens_length = [t.numel() for t in retrieved_tgt_tokens]
 

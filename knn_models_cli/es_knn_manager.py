@@ -34,7 +34,7 @@ def retrieve(args: Namespace):
             yield text
 
     elastic_knn = ElasticKnnSearch(args)
-    source_text_neighbors, target_text_neighbors = elastic_knn.retrieve(
+    source_text_neighbors, target_text_neighbors, text_ids = elastic_knn.retrieve(
         query_generator(),
         args.index_name,
         args.size,
@@ -42,20 +42,26 @@ def retrieve(args: Namespace):
     )
 
     retrieval_results = {}
-    for query_idx, (source_text_neighbors_per_query, target_text_neighbors_per_query) in enumerate(
+    for query_idx, (
+        source_text_neighbors_per_query, 
+        target_text_neighbors_per_query,
+        text_ids_per_query,
+    ) in enumerate(
         zip(
             source_text_neighbors,
             target_text_neighbors,
+            text_ids,
         )
     ):
         combined_neighbors_per_query = {}
-        for neighbor_idx, (source_text, target_text) in enumerate(
+        for neighbor_idx, (source_text, target_text, text_id) in enumerate(
             zip(
                 source_text_neighbors_per_query,
-                target_text_neighbors_per_query
+                target_text_neighbors_per_query,
+                text_ids_per_query,
             )
         ):
-            combined_neighbors_per_query[f"neighbor_{neighbor_idx}"] = (source_text, target_text)
+            combined_neighbors_per_query[f"neighbor_{neighbor_idx}"] = (text_id, source_text, target_text)
         
         retrieval_results[f"query_{query_idx}"] = combined_neighbors_per_query
     
