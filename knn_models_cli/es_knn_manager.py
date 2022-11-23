@@ -61,7 +61,11 @@ def retrieve(args: Namespace):
                 text_ids_per_query,
             )
         ):
-            combined_neighbors_per_query[f"neighbor_{neighbor_idx}"] = (text_id, source_text, target_text)
+            combined_neighbors_per_query[f"neighbor_{neighbor_idx}"] = (
+                text_id, 
+                source_text, 
+                target_text
+            )
         
         retrieval_results[f"query_{query_idx}"] = combined_neighbors_per_query
     
@@ -147,7 +151,7 @@ def get_parser():
             "--retrieval-results",
             type=str,
             required=True,
-            help="pato to retrieval results (json format)"
+            help="path to retrieval results (json format)"
         )
     
     return parser
