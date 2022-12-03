@@ -33,8 +33,9 @@ def save_datastore_knn(
         
         index = faiss.index_cpu_to_gpu(provider=resource, device=0, index=index, options=cloner_options)
 
-    logger.info(f"Setting nprobe of index to {nprobe}")
-    index.nprobe = nprobe
+    if hasattr(index, "nprobe"):
+        logger.info(f"Setting nprobe of index to {nprobe}")
+        index.nprobe = nprobe
 
     datastore = os.path.dirname(datastore_keys.filename)
     datastore_knn_idx_path = os.path.join(datastore, "datastore_knn_idx.npy")
