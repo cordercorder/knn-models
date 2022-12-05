@@ -67,6 +67,7 @@ fairseq-preprocess \
 Generate the datastore with the pre-trained NMT model:
 ``` bash
 domain="it"
+knn_models=/path/to/knn_models
 data_bin=/path/to/multi-domin-data-bin/${domain}
 datastore=/path/to/multi-domin-datastore/${domain}
 datastore_size=`count_tokens -d ${data_bin}/train.de-en.en`
@@ -75,6 +76,7 @@ checkpoint=/path/to/pretrained_model/wmt19.de-en.ffn8192.pt
 mkdir -p ${datastore}
 
 generate_mt_datastore ${data_bin} \
+    --user-dir ${knn_models} \
     --task translation_knn \
     --gen-subset train \
     --path ${checkpoint} \

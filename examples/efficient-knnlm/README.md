@@ -53,6 +53,7 @@ before FFN of the last layer (`--module-to-capture "layers[-1].final_layer_norm"
 ensure there is enough free disk space before running this.**
 
 ``` bash
+knn_models=/path/to/knn_models
 wikitext_data_bin=/path/to/wikitext-103-dataset-databin
 checkpoint=/path/to/pretrained-model/model.pt
 datastore=/path/to/datastore
@@ -65,6 +66,7 @@ mkdir -p ${datastore}
 datastore_size=103225485
 
 generate_lm_datastore ${wikitext_data_bin} \
+    --user-dir ${knn_models} \
     --task language_modeling_knn \
     --module-to-capture "layers[-1].final_layer_norm" \
     --sample-break-mode none \
@@ -166,6 +168,7 @@ setting of [kNN-LM](../knnlm/README.md), the script below loads
 the value weights (`--load-value-weights`).
 
 ``` bash
+knn_models=/path/to/knn_models
 wikitext_data_bin=/path/to/wikitext-103-dataset-databin
 pruned_datastore=/path/to/pruned-datastore
 checkpoint=/path/to/pretrained-model/model.pt
@@ -173,6 +176,7 @@ reduced_keys_dimension=512
 datastore_size="pruned datastore size"
 
 eval_knn_lm ${wikitext_data_bin} \
+    --user-dir ${knn_models} \
     --task language_modeling_knn \
     --module-to-capture "layers[-1].final_layer_norm" \
     --recompute-distance \
