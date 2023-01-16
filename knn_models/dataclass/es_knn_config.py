@@ -36,7 +36,8 @@ class BaseEsKnnConfig(FairseqDataclass):
     size: int = field(
         default=10,
         metadata={
-            "help": "the number of hits to return"
+            "help": "the number of hits to return (the number of bilingual sentence pairs "
+            "used for constructing the tiny datastore)"
         }
     )
 
