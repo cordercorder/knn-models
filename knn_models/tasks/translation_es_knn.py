@@ -30,7 +30,7 @@ from knn_models.es_knn_utils import (
 
 @dataclass
 class TranslationEsKnnConfig(TranslationConfig):
-    """config for nearest neighbor machine translation"""
+    """config for nearest neighbor machine translation based on ElasticSearch"""
     es_knn_config: EsKnnConfig = EsKnnConfig()
     max_tokens: Optional[int] = II("dataset.max_tokens")
     batch_size: Optional[int] = II("dataset.batch_size")

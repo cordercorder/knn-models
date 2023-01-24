@@ -22,7 +22,7 @@ class BaseKnnConfig(FairseqDataclass):
         }
     )
     keys_dimension: int = field(
-        default=0,
+        default=1024,
         metadata={
             "help": "the feature dimension of datastore keys"
         }
@@ -78,7 +78,7 @@ class BaseKnnConfig(FairseqDataclass):
     module_to_capture: str = field(
         default="layers[-1]",
         metadata={
-            "help": "the outputs of the which module in decoder to be captured. "
+            "help": "the outputs of the module in decoder to be captured. "
             "the default module is the last layer of decoder"
         }
     )
@@ -138,5 +138,41 @@ class AdaptiveKnnConfig(BaseKnnConfig):
         default=0.0,
         metadata={
             "help": "dropout of meta-k network"
+        }
+    )
+
+
+@dataclass
+class RobustKnnConfig(BaseKnnConfig):
+    num_neighbors: int = field(
+        default=1,
+        metadata={
+            "help": "the number of neighbors to retrieve"
+        }
+    )
+    hidden_size_1: int = field(
+        default=32,
+        metadata={
+            "help": "hidden size of parameter matrices (W_1, W_2, and W_5)"
+        }
+    )
+    hidden_size_2: int = field(
+        default=4,
+        metadata={
+            "help": "hidden size of parameter matrices (W_3 and W_4)"
+        }
+    )
+    alpha_zero: float = field(
+        default=1.0,
+        metadata={
+            "help": "initial perturbation ratio during training stage. "
+            "set the default value to 1.0 to follow the official implementation"
+        }
+    )
+    beta: float = field(
+        default=1000.0,
+        metadata={
+            "help": "declining speed of perturbation ratio during training stage. "
+            "set the default value to 1000.0 to follow the official implementation"
         }
     )

@@ -30,7 +30,7 @@ class ForwardHook:
 
 
 class DimReduceForwardHook(ForwardHook):
-    """"Hook similar to ForwardHook while applying additional transformation to the collected output"""
+    """"similar to ForwardHook while applying additional transformation to the collected output"""
     def __init__(self, args):
         super().__init__()
 

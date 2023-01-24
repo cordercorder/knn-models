@@ -68,7 +68,8 @@ class TranslationAdaptiveKnnTask(TranslationTask):
         # make the meta-k network in the model and knn_search shared with each other
         self.knn_search.meta_k_network = meta_k_network
 
-        # rewrite `load_state_dict` function to successfully load the pretrained models when there are no meta-k networks in them
+        # rewrite `load_state_dict` function to successfully load the pretrained models 
+        # when there are no parameters of meta-k network in the checkpoint
         model.load_state_dict = partial(load_state_dict, model)
 
         # collect outputs from the specified module in decoder as the datastore keys
@@ -114,7 +115,15 @@ def load_state_dict(
     model_state_dict = model.state_dict()
     for key in model_state_dict.keys():
         if "meta_k_network" in key and key not in state_dict:
-            logger.info(f"params {key} dose not exists in the pretrained model, it will be initialized randomly")
+            logger.info(
+                f"params {key} dose not exists in the pretrained model, "
+                f"it will be initialized randomly"
+            )
             state_dict[key] = model_state_dict[key]
     
-    return super(model.__class__, model).load_state_dict(state_dict, strict, model_cfg, args)
+    return super(model.__class__, model).load_state_dict(
+        state_dict, 
+        strict, 
+        model_cfg, 
+        args
+    )

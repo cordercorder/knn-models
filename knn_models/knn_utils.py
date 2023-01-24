@@ -10,6 +10,7 @@ from torch import Tensor
 from fairseq import utils
 from knn_models.dataclass import (
     KnnConfig, 
+    RobustKnnConfig,
     AdaptiveKnnConfig,
 )
 from typing import Dict, List, Optional, Tuple
@@ -240,7 +241,7 @@ class AdaptiveKnnSearch(KnnSearch):
 
         distance.neg_().div_(self.cfg.temperature_value)
 
-        # B x T x R_k x k
+        # B x T x R_k x K
         distance = distance.unsqueeze_(2).expand(bsz, seq_len, self.reduced_k, self.cfg.num_neighbors)
         self.distance_mask = self.distance_mask.to(distance.device)
 
@@ -248,7 +249,7 @@ class AdaptiveKnnSearch(KnnSearch):
 
         distance = utils.softmax(distance, dim=-1)
 
-        # B x T x k
+        # B x T x K
         distance = p_meta.unsqueeze(2).matmul(distance).squeeze(2)
 
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": lambda_value}
@@ -256,7 +257,7 @@ class AdaptiveKnnSearch(KnnSearch):
     def get_value_count(self, tgt_idx, relative_label_count=False):
         bsz, seq_len, k = tgt_idx.size()
 
-        # B x T x k x k
+        # B x T x K x K
         tgt_idx = tgt_idx.unsqueeze(2).expand(bsz, seq_len, k, k)
 
         self.value_count_mask = self.value_count_mask.to(tgt_idx.device)
@@ -268,7 +269,7 @@ class AdaptiveKnnSearch(KnnSearch):
             (value_sorted[:, :, :, 1:] - value_sorted[:, :, :, :-1]).ne_(0).long()
         )
 
-        # B x T x k
+        # B x T x K
         value_count = value_sorted.ne_(0).long().sum(dim=3)
         value_count[:, :, :-1].sub_(1)
 
@@ -276,6 +277,203 @@ class AdaptiveKnnSearch(KnnSearch):
             value_count[:, :, 1:] = value_count[:, :, 1:] - value_count[:, :, :-1]
         
         return value_count
+
+
+class RobustKnnSearch(AdaptiveKnnSearch):
+    def __init__(self, cfg: RobustKnnConfig):
+        # skip __init__ in AdaptiveKnnSearch
+        super(AdaptiveKnnSearch, self).__init__(cfg)
+        self.value_count_mask = self.get_value_count_mask(self.cfg.num_neighbors)
+
+        self.W_1_5 = None
+        self.W_2 = None
+        self.W_3 = None
+        self.W_4 = None
+        self.W_6 = None
+
+        self.output_projection = None
+
+        assert self.cfg.load_keys, "please set `--load-keys` flag when using RobustKnnSearch"
+    
+    def retrieve(self, queries, mt_prob, target, num_updates, training):
+        bsz, seq_len = queries.size()[:2]
+        # B*T x C
+        queries = queries.contiguous().view(-1, queries.size(-1))
+
+        queries_device = queries.device
+        queries_dtype = queries.dtype
+
+        queries = queries.float()
+
+        # B*T x K
+        idx = self.index.search(queries.cpu().numpy(), self.cfg.num_neighbors)[1]
+        # B*T x K x C
+        retrieved_keys = torch.from_numpy(self.datastore_keys[idx]).to(queries_device)
+
+        # recompute distance and idx
+        # B*T x K
+        distance = (retrieved_keys.float() - queries.unsqueeze(1)).pow(2).sum(dim=2)
+        del retrieved_keys
+        distance, indices = torch.sort(distance, dim=1)
+        idx = np.take_along_axis(idx, indices=indices.cpu().numpy(), axis=1)
+        del indices
+
+        # B*T x K x C
+        retrieved_keys = torch.from_numpy(self.datastore_keys[idx]).to(queries_device)
+        # B x T x K x C
+        retrieved_keys = retrieved_keys.view(bsz, seq_len, self.cfg.num_neighbors, -1).float()
+
+        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries_device)
+        tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+
+        if training:
+            alpha = self.cfg.alpha_zero * math.exp(-num_updates / self.cfg.beta)
+
+            # B x T
+            random_alpha = torch.rand([bsz, seq_len], device=queries_device)
+
+            # the index of padding token is 1
+            padding_mask = target.ne(1)
+
+            # B x T
+            perturbation_mask = (random_alpha < alpha) & padding_mask
+            del random_alpha
+
+            # perturbation for the first problem as shown in Figure 4(a) of the paper
+            # B x T x K x C
+            perturbation = torch.randn_like(retrieved_keys) * 0.01
+            perturbation.masked_fill_(
+                perturbation_mask.logical_not_().unsqueeze_(2).unsqueeze_(3), 
+                0.0
+            )
+            del perturbation_mask
+
+            retrieved_keys.add_(perturbation)
+
+            # perturbation for the second problem as shown in Figure 4(b) of the paper
+            # B x T x C
+            queries = queries.view(bsz, seq_len, -1)
+            perturbation = torch.randn_like(queries) * 0.01
+            pseudo_keys = queries + perturbation
+            del perturbation
+
+            # B x T x K x C
+            pseudo_keys = torch.cat([pseudo_keys.unsqueeze(2), retrieved_keys[:, :, :-1]], dim=2)
+
+            # B x T x K
+            target = target.unsqueeze(2)
+            pseudo_tgt_idx = torch.cat([target, tgt_idx[:, :, :-1]], dim=2)
+
+            # B x T
+            pseudo_keys_mask = (tgt_idx == target).any(dim=2)
+
+            # equivalent to: ~((tgt_idx == target).any(dim=2)) & padding_mask
+            pseudo_keys_mask.logical_not_().logical_and_(padding_mask)
+            del padding_mask
+
+            random_alpha = torch.rand([bsz, seq_len], device=queries_device)
+            # equivalent to: pseudo_keys_mask = pseudo_keys_mask & (random_alpha < alpha)
+            pseudo_keys_mask.logical_and_(random_alpha < alpha)
+            del random_alpha
+
+            # B x T x 1
+            pseudo_keys_mask = pseudo_keys_mask.unsqueeze_(2)
+
+            pseudo_tgt_idx = torch.where(pseudo_keys_mask, pseudo_tgt_idx, tgt_idx)
+            tgt_idx = pseudo_tgt_idx
+
+            pseudo_keys = torch.where(pseudo_keys_mask.unsqueeze_(3), pseudo_keys, retrieved_keys)
+            del pseudo_keys_mask
+
+            retrieved_keys = pseudo_keys
+            del pseudo_keys
+
+            # B x T x K
+            distance = (retrieved_keys - queries.unsqueeze(2)).pow(2).sum(dim=3)
+            del queries
+
+            distance, indices = torch.sort(distance, dim=2)
+            tgt_idx = tgt_idx.gather(dim=2, index=indices)
+        else:
+            distance = distance.view(bsz, seq_len, -1)
+        
+        # in case of mix precision trianing
+        distance = distance.type(queries_dtype)
+        retrieved_keys = retrieved_keys.type(queries_dtype)
+
+        # B x T x K
+        value_count = self.get_value_count(tgt_idx)
+        value_count = value_count.type(queries_dtype)
+
+        # B x T x 2
+        temparature_s_knn = self.W_1_5(
+            torch.tanh(
+                self.W_2(
+                    torch.cat([distance, value_count], dim=2)
+                )
+            )
+        )
+        del value_count
+
+        # B x T x 1
+        s_knn, temparature = temparature_s_knn.chunk(2, dim=2)
+        del temparature_s_knn
+
+        # B x T x K x V
+        keys_prob = utils.log_softmax(self.output_projection(retrieved_keys), dim=3)
+        del retrieved_keys
+
+        if training:
+            # B x T x K
+            keys_prob = keys_prob.gather(dim=3, index=pseudo_tgt_idx.unsqueeze_(3)).squeeze(3)
+            del pseudo_tgt_idx
+            keys_prob = keys_prob.gather(dim=2, index=indices)
+            del indices
+        else:
+            # B x T x K
+            keys_prob = keys_prob.gather(dim=3, index=tgt_idx.unsqueeze(3)).squeeze(3)
+        
+        keys_prob = keys_prob.type(queries_dtype)
+
+        # B x T x V
+        mt_prob = mt_prob.log()
+        mt_prob = mt_prob.type(queries_dtype)
+        
+        # B x T x K
+        mt_prob_of_tgt_idx = mt_prob.gather(dim=2, index=tgt_idx)
+        # B x T x K x 1
+        c_k = self.W_3(
+            torch.tanh(
+                self.W_4(
+                    torch.stack([keys_prob, mt_prob_of_tgt_idx], dim=3)
+                )
+            )
+        )
+        # B x T x K
+        c_k = c_k.squeeze(3)
+
+        # B x T x 8
+        top_mt_prob = mt_prob.topk(8, dim=2)[0]
+        del mt_prob
+
+        # B x T x 1
+        s_nmt = self.W_6(torch.cat([top_mt_prob, keys_prob, mt_prob_of_tgt_idx], dim=2))
+        del top_mt_prob, keys_prob, mt_prob_of_tgt_idx
+
+        # B x T x 1
+        lambda_value = utils.softmax(torch.cat([s_knn, s_nmt], dim=2), dim=2)[:, :, :1]
+        del s_knn, s_nmt
+
+        temparature = torch.sigmoid(temparature)
+
+        distance = distance.float()
+        temparature = temparature.float()
+        c_k = c_k.float()
+
+        distance = - distance / temparature + c_k
+        distance = utils.softmax(distance, dim=2)
+        distance = distance * lambda_value
+        return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": lambda_value}
 
 
 def get_normalized_probs(

@@ -47,7 +47,7 @@ class EsKnnConfig(BaseEsKnnConfig):
     module_to_capture: str = field(
         default="layers[-1]",
         metadata={
-            "help": "the outputs of the which module in decoder to be captured. "
+            "help": "the outputs of the module in decoder to be captured. "
             "the default module is the last layer of decoder"
         }
     )
