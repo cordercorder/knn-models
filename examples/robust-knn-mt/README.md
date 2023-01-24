@@ -4,11 +4,11 @@
 
 
 The paper [Towards Robust k-Nearest-Neighbor Machine Translation](https://arxiv.org/abs/2210.08808) 
-proposes Distribution Calibration (DC) network and Weight Prediction (WP) network to leverage  
+proposes Distribution Calibration (DC) network and Weight Prediction (WP) network to leverage 
 the model confidence to improve the final probability distribution. Additionally, two types of 
 perturbations are injected into the retrieved items during training to improve the distribution 
 further. We provide an implementation of this paper in kNN-models and show a usage example 
-with a specific focus on the IT domain corpus of the
+with a specific focus on the IT domain corpus of the 
 [multi-domain parallel data](https://github.com/roeeaharoni/unsupervised-domain-clusters)
 on this page. 
 
