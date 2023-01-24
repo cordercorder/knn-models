@@ -165,8 +165,8 @@ class TranslationEsKnnTask(TranslationTask):
             target = batch["target"].view(-1)
             del batch
 
-            # in most cases, the padding index between the source and target dictionary is the same
-            # so we use the padding index of the source dictionary here
+            # in most cases, the of padding token between the source and target dictionary 
+            # is identical so we use the padding index of the source dictionary here
             target_mask = target.ne(pad_idx)
 
             # Reduced_B*T x C
