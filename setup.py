@@ -31,9 +31,9 @@ if __name__ == "__main__":
         ],
         entry_points={
             "console_scripts": [
-                "build-faiss-index = knn_models_cli.build_faiss_index:cli_main",
-                "count-tokens = knn_models_cli.count_tokens:cli_main",
-                "dedup-datastore = knn_models_cli.dedup_datastore:cli_main",
+                "build_faiss_index = knn_models_cli.build_faiss_index:cli_main",
+                "count_tokens = knn_models_cli.count_tokens:cli_main",
+                "dedup_datastore = knn_models_cli.dedup_datastore:cli_main",
                 "eval_knn_lm = knn_models_cli.eval_knn_lm:cli_main",
                 "generate_lm_datastore = knn_models_cli.generate_lm_datastore:cli_main",
                 "generate_mt_datastore = knn_models_cli.generate_mt_datastore:cli_main",
