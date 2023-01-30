@@ -86,6 +86,15 @@ class TranslationRobustKnnTask(TranslationTask):
 
     def build_parameter_matrices(self):
         # we follow the description in the paper to name these parameter matrices
+        
+        # the top 8 probabilities of the NMT distribution are used 
+        # as the input features, so the size of input feature will 
+        # increase by 8
+        W_6 = nn.Linear(self.cfg.knn_config.num_neighbors * 2 + 8, 1)
+
+        W_4 = nn.Linear(2, self.cfg.knn_config.hidden_size_2)
+        W_3 = nn.Linear(self.cfg.knn_config.hidden_size_2, 1)
+
         W_2 = nn.Linear(
             self.cfg.knn_config.num_neighbors * 2, 
             self.cfg.knn_config.hidden_size_1
@@ -93,13 +102,6 @@ class TranslationRobustKnnTask(TranslationTask):
         # W_1_5 is composed of W_1 and W_5
         W_1_5 = nn.Linear(self.cfg.knn_config.hidden_size_1, 2)
 
-        W_4 = nn.Linear(2, self.cfg.knn_config.hidden_size_2)
-        W_3 = nn.Linear(self.cfg.knn_config.hidden_size_2, 1)
-
-        # the top 8 probabilities of the NMT distribution are used 
-        # as the input features, so the size of input feature will 
-        # increase by 8
-        W_6 = nn.Linear(self.cfg.knn_config.num_neighbors * 2 + 8, 1)
         return W_1_5, W_2, W_3, W_4, W_6
 
 
