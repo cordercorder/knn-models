@@ -122,7 +122,7 @@ save_dir=/path/to/trained_model/${domain}
 
 mkdir -p ${save_dir}
 
-fairseq-train ${data_bin} \
+CUDA_VISIBLE_DEVICES=0 fairseq-train ${data_bin} \
     --user-dir ${knn_models} \
     --task translation_adaptive_knn \
     --source-lang de \

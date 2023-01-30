@@ -117,7 +117,7 @@ datastore_size=`count_tokens -d ${data_bin}/train.de-en.en`
 checkpoint=/path/to/pretrained_model/wmt19.de-en.ffn8192.pt
 save_dir=/path/to/trained_model/${domain}
 
-fairseq-train ${data_bin} \
+CUDA_VISIBLE_DEVICES=0 fairseq-train ${data_bin} \
     --user-dir ${knn_models} \
     --task translation_robust_knn \
     --source-lang de \
