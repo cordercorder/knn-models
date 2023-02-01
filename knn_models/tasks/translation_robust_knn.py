@@ -41,6 +41,7 @@ class TranslationRobustKnnConfig(TranslationConfig):
 
 @register_task("translation_robust_knn", dataclass=TranslationRobustKnnConfig)
 class TranslationRobustKnnTask(TranslationTask):
+    """task for robust nearest neighbor machine translation"""
     def __init__(self, cfg: TranslationRobustKnnConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
         self.knn_search = RobustKnnSearch(cfg.knn_config)

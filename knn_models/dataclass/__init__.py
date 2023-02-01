@@ -2,6 +2,7 @@ from .knn_config import (
     KnnConfig,
     RobustKnnConfig,
     AdaptiveKnnConfig,
+    KernelSmoothedKnnConfig,
 )
 from .dim_reduce_config import (
     DimReduceConfig,

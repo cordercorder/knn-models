@@ -12,6 +12,7 @@ from knn_models.dataclass import (
     KnnConfig, 
     RobustKnnConfig,
     AdaptiveKnnConfig,
+    KernelSmoothedKnnConfig,
 )
 from typing import Dict, List, Optional, Tuple
 
@@ -487,6 +488,82 @@ class RobustKnnSearch(AdaptiveKnnSearch):
 
         distance = utils.softmax(distance, dim=2)
         distance = distance * lambda_value
+        return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": lambda_value}
+
+
+class KernelSmoothedKnnSearch(KnnSearch):
+    def __init__(self, cfg: KernelSmoothedKnnConfig):
+        super().__init__(cfg)
+    
+        self.bandwidth_estimator = None
+        self.weight_estimator = None
+
+        assert self.cfg.load_keys, "please set `--load-keys` flag when using KernelSmoothedKnnSearch"
+    
+    def retrieve(self, queries):
+        bsz, seq_len = queries.size()[:2]
+        # B*T x C
+        queries = queries.contiguous().view(-1, queries.size(-1))
+
+        queries_device = queries.device
+
+        if self.bandwidth_estimator.training:
+            # B*T x K
+            distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors + 1)
+            # retrieval dropout
+            distance = distance[:, 1:]
+            idx = idx[:, 1:]
+        else:
+            # B*T x K
+            distance, idx = self.index.search(queries.cpu().float().numpy(), self.cfg.num_neighbors)
+        
+        # B*T x K x C
+        retrieved_keys = torch.from_numpy(self.datastore_keys[idx]).type_as(queries)
+        # B*T x 2*C
+        features = torch.cat([queries, retrieved_keys.mean(dim=1)], dim=1)
+
+        # B*T x 1
+        bandwidth = self.bandwidth_estimator(features)
+        bandwidth = bandwidth.exp()
+
+        distance = torch.from_numpy(distance).type_as(queries)
+
+        if self.cfg.kernel_type == "laplacian":
+            distance.sqrt_()
+        
+        distance.neg_()
+        
+        distance = distance / bandwidth
+        del bandwidth
+        
+        # B*T x K
+        distance = utils.softmax(distance, dim=1)
+        distance = distance.type_as(queries)
+
+        # B*T x 1 x K @ B*T x K x C -> B*T x 1 x C
+        weighted_retrieved_keys = distance.unsqueeze(1).matmul(retrieved_keys)
+        del retrieved_keys
+
+        # B*T x C
+        weighted_retrieved_keys = weighted_retrieved_keys.squeeze(1)
+        features = torch.cat([queries, weighted_retrieved_keys], dim=1)
+        del queries, weighted_retrieved_keys
+
+        # B*T x 1
+        lambda_value = self.weight_estimator(features)
+
+        # B x T x K
+        distance = distance.view(bsz, seq_len, -1)
+
+        # B x T x 1
+        lambda_value = lambda_value.view(bsz, seq_len, -1)
+
+        distance = distance * lambda_value
+        tgt_idx = torch.from_numpy(self.datastore_values[idx]).to(queries_device)
+        tgt_idx = tgt_idx.view(bsz, seq_len, -1)
+
+        distance = distance.float()
+        lambda_value = lambda_value.float()
         return {"knn_prob": distance, "tgt_idx": tgt_idx, "lambda_value": lambda_value}
 
 

@@ -5,6 +5,7 @@ from fairseq.dataclass import FairseqDataclass, ChoiceEnum
 
 
 KEYS_DTYPE_CHOICES = ChoiceEnum(["fp16", "fp32"])
+KERNEL_TYPE_CHOICES = ChoiceEnum(["laplacian", "gaussian"])
 
 
 @dataclass
@@ -174,5 +175,21 @@ class RobustKnnConfig(BaseKnnConfig):
         metadata={
             "help": "declining speed of perturbation ratio during training stage. "
             "set the default value to 1000.0 to follow the official implementation"
+        }
+    )
+
+
+@dataclass
+class KernelSmoothedKnnConfig(BaseKnnConfig):
+    num_neighbors: int = field(
+        default=1,
+        metadata={
+            "help": "the number of neighbors to retrieve"
+        }
+    )
+    kernel_type: KERNEL_TYPE_CHOICES = field(
+        default="laplacian",
+        metadata={
+            "help": "the type of kernel to use"
         }
     )
