@@ -35,9 +35,10 @@ Main features:
 
 The repository contains the reference implementation of following papers (sorted by publication date):
  - [Simple and Scalable Nearest Neighbor Machine Translation (Under review at ICLR 2023)](examples/es_knnmt)
- - [Towards Robust k-Nearest-Neighbor Machine Translation (EMNLP 2022)](examples/robust-knn-mt/)
+ - [Towards Robust k-Nearest-Neighbor Machine Translation (EMNLP 2022)](examples/robust-knn-mt)
  - [Efficient Cluster-Based k-Nearest-Neighbor Machine Translation (ACL 2022)](examples/PCMKT)
  - [Efficient Nearest Neighbor Language Models (EMNLP 2021)](examples/efficient-knnlm)
+ - [Learning Kernel-Smoothed Machine Translation with Retrieved Examples (EMNLP 2021)](examples/KSTER)
  - [Adaptive Nearest Neighbor Machine Translation (ACL 2021)](examples/adaptive-knn-mt)
  - [Nearest Neighbor Machine Translation (ICLR 2021)](examples/knnmt)
  - [Generalization through Memorization: Nearest Neighbor Language Models (ICLR 2020)](examples/knnlm)
