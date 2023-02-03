@@ -22,7 +22,6 @@ tar -zxvf wmt19.de-en.ffn8192.tar.gz
 ```
 
 ## Preprocess the data
-
 Once the [multi-domain parallel corpus](https://github.com/roeeaharoni/unsupervised-domain-clusters) 
 has been downloaded. It can be preprocessed by the `prepare-domadapt.sh` script. Please ensure 
 [mosesdecoder](https://github.com/moses-smt/mosesdecoder) has been downloaded and 
@@ -104,7 +103,7 @@ build_faiss_index \
 
 
 ## Train DC network and WP network
-Train DC network WP network on the validation set:
+Train DC network WP network with the validation set:
 ``` bash
 domain="it"
 

@@ -3,8 +3,8 @@
 [https://openreview.net/pdf?id=uu1GBD9SlLe](https://openreview.net/pdf?id=uu1GBD9SlLe)
 
 
-**As the paper is still under review at ICLR 2023, to obey the double blind review policy
-we hereby declare that we are not the author of the paper and do not know about the author identity.**
+**As the paper is still under review at ICLR 2023, to obey the double-blind review policy
+we hereby declare that we are not the author of the paper and do not know about the author's identity.**
 
 
 The paper [Simple and Scalable Nearest Neighbor Machine Translation](https://openreview.net/pdf?id=uu1GBD9SlLe) 
@@ -70,7 +70,7 @@ fairseq-preprocess \
 
 
 ## Add the training set to ElasticSearch
-Add the training set to ElasticSearch to make it become searchable.
+Add the training set to ElasticSearch to make it searchable.
 ``` bash
 domain="it"
 preprocessed_multi_domin_corpus=/path/to/preprocessed-multi-domin-corpus/${domain}
