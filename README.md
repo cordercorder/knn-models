@@ -6,6 +6,7 @@
     <a href="#requirements-and-installation">Requirements and Installation</a> • 
     <a href="#getting-started">Getting Started</a> • 
     <a href="#benchmarks">Benchmarks</a> • 
+    <a href="#faq">FAQ</a> • 
     <a href="#acknowledgements">Acknowledgements</a>
 </p>
 
@@ -44,7 +45,7 @@ The repository contains the reference implementation of following papers (sorted
  - [Generalization through Memorization: Nearest Neighbor Language Models (ICLR 2020)](examples/knnlm)
 
 
-The detailed READMEs about how to reproduce them with kNN-models can be found in the `examples` folder.
+**The detailed READMEs about how to reproduce them with kNN-models can be found in the [examples](examples) folder.**
 
 
 ## Requirements and Installation
@@ -78,7 +79,7 @@ for *k*-nearest neighbor search rather than [Faiss](https://github.com/facebookr
 
 ## Getting Started
 
-We try to make the implementation independent of the model architecture during developing this repository. Consequently, 
+**We try to make the implementation independent of the model architecture during developing this repository**. Consequently, 
 we extend the task in [Fairseq](https://github.com/facebookresearch/fairseq) with the ability to perform similarity search. 
 **As the task can be combined with different model architectures, we can enhance various pre-trained models with the external 
 memory without modifying the official code of [Fairseq](https://github.com/facebookresearch/fairseq).** For example, the 
@@ -563,6 +564,35 @@ The observed maximum GPU memory consumption of kNN-models during inference is pr
         <td>8375 MB</td>
     </tr>
 </table>
+
+
+## FAQ
+
+### I can't find the model implementation in kNN-models
+Most of the studies of retrieval argumented sequence modeling implemented in kNN-models mainly rely on two procedures to work: 
+(1) saving the intermediate hidden states of the model during forward pass, (2) retrieving useful information from a datastore 
+according to the saved intermediate hidden states to improve the probability distribution over tokens. **For the first procedure, 
+we register a [forward hook](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.register_forward_hook) 
+on the model to collect the intermediate hidden states, which is implemented in the `build_model` function (please refer 
+[here](https://github.com/cordercorder/knn-models/blob/main/knn_models/tasks/translation_knn.py#L53) for more details). For 
+the second procedure, as Fairseq calls the `get_normalized_probs` function to obtain the probability over tokens for almost all 
+sequence-to-sequence generation models (please refer 
+[here](https://github.com/facebookresearch/fairseq/blob/v0.12.1/fairseq/sequence_generator.py#L831) for more details), we rewrite 
+the `get_normalized_probs` function to incorporate the retrieval results into the model. Consequently, the detailed model 
+implementation lies in the rewrited `get_normalized_probs` function.**
+
+
+### How do these commands such as `build_faiss_index` and `count_tokens` provided by kNN-models work?
+Running `build_faiss_index` is equivalent to running the `build_faiss_index.py` script in the [knn_models_cli](knn_models_cli) folder 
+and `count_tokens` works in a similar way. Specifically,  We use the `console_scripts` entry point to provide command line tools and 
+all the commands in kNN-models can be found in [setup.py](https://github.com/cordercorder/knn-models/blob/main/setup.py#L33). 
+
+
+### How to make the GPU used by [faiss](https://github.com/facebookresearch/faiss) different from the model during training or inference?
+You can control the GPU used by [faiss](https://github.com/facebookresearch/faiss) by setting the 
+`--knn-device-id` flag (e.g., `--knn-device-id 1`). **Additionally, please also add the `--distributed-world-size` flag (e.g., 
+`--distributed-world-size 1`) during training to ensure that the GPU used by [faiss](https://github.com/facebookresearch/faiss) is 
+not occupied by the model.**
 
 
 ## Acknowledgements
