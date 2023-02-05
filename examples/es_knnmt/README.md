@@ -3,10 +3,6 @@
 [https://openreview.net/pdf?id=uu1GBD9SlLe](https://openreview.net/pdf?id=uu1GBD9SlLe)
 
 
-**As the paper is still under review at ICLR 2023, to obey the double-blind review policy
-we hereby declare that we are not the author of the paper and do not know about the author's identity.**
-
-
 The paper [Simple and Scalable Nearest Neighbor Machine Translation](https://openreview.net/pdf?id=uu1GBD9SlLe) 
 introduces SK-MT to reduce the storage requirement of kNN-MT and its variants which usually rely on the 
 similarity search of dense vectors to perform retrieval across the whole datastore. Specifically, SK-MT 

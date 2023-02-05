@@ -54,12 +54,26 @@ class EsKnnConfig(BaseEsKnnConfig):
     num_neighbors: int = field(
         default=1,
         metadata={
-            "help": "the number of neighbors to retrieve"
+            "help": "the number of retrieved items to use to construct the kNN "
+            "probability distribution"
         }
     )
     temperature_value: float = field(
         default=10,
         metadata={
             "help": "hyperparameter used for flattening the kNN probability distribution"
+        }
+    )
+    re_rank: bool = field(
+        default=False,
+        metadata={
+            "help": "wether to re-rank the retrieval results with edit-distance"
+        }
+    )
+    num_sentences_retained: int = field(
+        default=1,
+        metadata={
+            "help": "the number of retained bilingual sentences after re-ranking. note that "
+            "this argument does not take into effect when `re_rank` is False"
         }
     )

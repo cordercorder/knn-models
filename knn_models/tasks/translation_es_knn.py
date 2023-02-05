@@ -95,6 +95,8 @@ class TranslationEsKnnTask(TranslationTask):
             self.cfg.es_knn_config.index_name,
             self.cfg.es_knn_config.size,
             retrieve_source=True,
+            re_rank=self.cfg.es_knn_config.re_rank,
+            num_sentences_retained=self.cfg.es_knn_config.num_sentences_retained,
         )
         del queries
 

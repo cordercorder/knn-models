@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import numpy as np
 import torch.nn.functional as F
 
 try:
@@ -39,6 +40,28 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("knn_models_cli.es_knn_utils")
+
+
+def edit_distance(string1, string2):
+    if len(string1) < len(string2):
+        return edit_distance(string2, string1)
+
+    # len(string1) >= len(string2)
+    if len(string2) == 0:
+        return len(string1)
+
+    previous_row = range(len(string2) + 1)
+    for i, c1 in enumerate(string1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(string2):
+            # j+1 instead of j since previous_row and current_row are one character longer than string2
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
 
 
 class ElasticKnnSearch:
@@ -136,7 +159,15 @@ class ElasticKnnSearch:
         doc_count = info["indices"][index_name]["primaries"]["docs"]["count"]
         logger.info(f"Total document indexed {doc_count}")
 
-    def retrieve(self, queries: Iterable[str], index_name: str, size: int, retrieve_source: bool):
+    def retrieve(
+        self, 
+        queries: Iterable[str], 
+        index_name: str, 
+        size: int, 
+        retrieve_source: bool, 
+        re_rank: bool = False,
+        num_sentences_retained: int = 1,
+    ):
         searches = []
         for text in queries:
             searches.append(
@@ -173,7 +204,7 @@ class ElasticKnnSearch:
         retrieved_source_text = []
         retrieved_target_text = []
         retrieved_text_ids = []
-        for responses in search_results["responses"]:
+        for text, responses in zip(queries, search_results["responses"]):
             hits = responses["hits"]["hits"]
 
             retrieved_source_text_per_query = []
@@ -185,6 +216,43 @@ class ElasticKnnSearch:
                 retrieved_source_text_per_query.append(_source["source_text"])
                 retrieved_target_text_per_query.append(_source["target_text"])
                 retrieved_text_ids_per_query.append(neighbor["_id"])
+            
+            if re_rank:
+                similarity_scores = []
+                text_length = len(text)
+
+                for retrieved_text in retrieved_source_text_per_query:
+                    retrieved_text_length = len(retrieved_text)
+                    _score = 1.0 - edit_distance(text, retrieved_text) / max(text_length, retrieved_text_length)
+
+                    # sort in descending order
+                    similarity_scores.append(-_score)
+                
+                similarity_scores = np.asarray(similarity_scores, dtype=np.float32)
+                indices = np.argsort(similarity_scores)
+                del similarity_scores
+
+                indices = indices[: num_sentences_retained]
+
+                retrieved_source_text_per_query_new = []
+                retrieved_target_text_per_query_new = []
+                retrieved_text_ids_per_query_new = []
+
+                for idx in indices:
+                    retrieved_source_text_per_query_new.append(retrieved_source_text_per_query[idx])
+                    retrieved_target_text_per_query_new.append(retrieved_target_text_per_query[idx])
+                    retrieved_text_ids_per_query_new.append(retrieved_text_ids_per_query[idx])
+                
+                del indices
+                
+                retrieved_source_text_per_query = retrieved_source_text_per_query_new
+                del retrieved_source_text_per_query_new
+
+                retrieved_target_text_per_query = retrieved_target_text_per_query_new
+                del retrieved_target_text_per_query_new
+
+                retrieved_text_ids_per_query = retrieved_text_ids_per_query_new
+                del retrieved_text_ids_per_query_new
 
             retrieved_source_text.append(retrieved_source_text_per_query)
             retrieved_target_text.append(retrieved_target_text_per_query)
