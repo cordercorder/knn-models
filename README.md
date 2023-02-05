@@ -569,7 +569,7 @@ The observed maximum GPU memory consumption of kNN-models during inference is pr
 ## FAQ
 
 ### I can't find the model implementation in kNN-models
-Most of the studies of retrieval argumented sequence modeling implemented in kNN-models mainly rely on two procedures to work: 
+Most studies of retrieval argumented sequence modeling implemented in kNN-models mainly rely on two procedures to work: 
 (1) saving the intermediate hidden states of the model during forward pass, (2) retrieving useful information from a datastore 
 according to the saved intermediate hidden states to improve the probability distribution over tokens. **For the first procedure, 
 we register a [forward hook](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.register_forward_hook) 
