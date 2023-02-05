@@ -12,9 +12,6 @@ algorithms such as BM25, then the retrieved sentence pairs are used to construct
 
 This page includes instructions on how to use SK-MT with kNN-models, taking the IT domain corpus from 
 [multi-domain parallel data](https://github.com/roeeaharoni/unsupervised-domain-clusters) as an example. 
-**For efficiency, we do not use edit-distance to re-rank the search results of ElasticSearch as the time 
-complexity of computing edit-distance is quadratic to the input string length, which is slightly different 
-from the paper. Despite that, we found SK-MT can still achieve reasonably good performance without re-ranking.**
 
 
 ## Download the pre-trained model
@@ -88,6 +85,13 @@ es_knn_manager \
 The script below will retrieve 16 sentence pairs for each input sentence (specified by the `--size` flag ) 
 and performs grid search over `num_neighbors` ∈ {1, 2, 4, 8, 16, 32, 64}, and `temperature_value` 
 ∈ {5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110} on the validation set.
+
+**For efficiency, we do not use edit-distance to re-rank the search results of ElasticSearch in the script below 
+as the time complexity of computing edit-distance is quadratic to the input string length, which is slightly different 
+from the paper. Despite that, we found SK-MT can still achieve reasonably good performance without re-ranking. If you 
+want to re-rank the results as described in the paper, you can add `--re-rank` flag and use `--num-sentences-retained` 
+to control the number of maintained bilingual sentences (e.g., `--num-sentences-retained 8`).**
+
 
 ``` bash
 domain="it"
