@@ -214,10 +214,10 @@ def main(cfg: DictConfig):
         generate_datastore_4_gram_values = False
         generate_datastore_4_gram_values_probs = False
 
-    datastore_4_gram_values_path = os.path.join(cfg.task.knn_config.datastore, "4_gram_values.npy")
-    datastore_4_gram_values_probs_path = os.path.join(cfg.task.knn_config.datastore, "4_gram_values_probs.npy")
-
     if is_pckmt_datastore:
+        datastore_4_gram_values_path = os.path.join(cfg.task.knn_config.datastore, "4_gram_values.npy")
+        datastore_4_gram_values_probs_path = os.path.join(cfg.task.knn_config.datastore, "4_gram_values_probs.npy")
+
         if os.path.isfile(datastore_4_gram_values_path):
             if over_write:
                 logger.warning(f"{datastore_4_gram_values_path} already exists! It will be overwritten!")
@@ -253,11 +253,36 @@ def main(cfg: DictConfig):
         )
     else:
         datastore_4_gram_values_probs = None
+    
+    # whether to save the prediction of NMT model during teacher-forcing greedy decoding
+    # this is needed for PLAC (pruning with local correctness)
+    generate_greedy_mt_prediction = os.environ.get("GENERATE_GREEDY_MT_PREDICTION", None) is not None
+
+    if generate_greedy_mt_prediction:
+        greedy_mt_prediction_path = os.path.join(cfg.task.knn_config.datastore, "greedy_mt_prediction.npy")
+
+        if os.path.isfile(greedy_mt_prediction_path):
+            if over_write:
+                logger.warning(f"{greedy_mt_prediction_path} already exists! It will be overwritten!")
+            else:
+                generate_greedy_mt_prediction = False
+    
+    if generate_greedy_mt_prediction:
+        logger.info(f"Saving greedy mt prediction in {greedy_mt_prediction_path}")
+        greedy_mt_prediction = np.memmap(
+            greedy_mt_prediction_path,
+            dtype=np.int64,
+            mode="w+",
+            shape=(cfg.task.knn_config.datastore_size)
+        )
+    else:
+        greedy_mt_prediction = None
 
     if ((datastore_keys is None) and
         (datastore_values is None) and
         (datastore_4_gram_values is None) and
-        (datastore_4_gram_values_probs is None)):
+        (datastore_4_gram_values_probs is None) and 
+        (greedy_mt_prediction) is None):
         logger.info("The datastore has already been saved! No datastore need to be generated")
         return
     
@@ -331,7 +356,10 @@ def main(cfg: DictConfig):
 
     # whether to only return features without applying output projection layer
     # only return features if there is no need to generate probabilities
-    decoder_features_only = True if not generate_datastore_4_gram_values_probs else False
+    if generate_datastore_4_gram_values_probs or generate_greedy_mt_prediction:
+        decoder_features_only = False
+    else:
+        decoder_features_only = True
 
     wps_meter = TimeMeter()
     for sample in progress:
@@ -400,7 +428,7 @@ def main(cfg: DictConfig):
             # B x T x 4
             target_4_gram = get_4_gram_values(target)
         
-        if generate_datastore_4_gram_values_probs:
+        if generate_datastore_4_gram_values_probs or generate_greedy_mt_prediction:
             if len(target_probs) > 1:
                 # B x T x V
                 # If there is more than one model, taking the average probability as target probabilities
@@ -408,11 +436,17 @@ def main(cfg: DictConfig):
             else:
                 target_probs = target_probs[0]
             
-            # B x T
-            target_probs = target_probs.gather(dim=2, index=target.unsqueeze(2)).squeeze(2)
+            if generate_datastore_4_gram_values_probs:
+                # B x T
+                target_probs = target_probs.gather(dim=2, index=target.unsqueeze(2)).squeeze(2)
 
-            # B x T x 4
-            target_4_gram_probs = get_4_gram_values_probs(target_probs)
+                # B x T x 4
+                target_4_gram_probs = get_4_gram_values_probs(target_probs)
+            
+            if generate_greedy_mt_prediction:
+                # B x T
+                greedy_mt_prediction_sample = target_probs.argmax(dim=2)
+
             del target_probs
 
         # B*T
@@ -437,6 +471,13 @@ def main(cfg: DictConfig):
             # B*T X 4
             target_4_gram_probs = target_4_gram_probs.view(-1, 4)
             target_4_gram_probs = target_4_gram_probs.index_select(dim=0, index=non_pad_indices)
+        
+        if generate_greedy_mt_prediction:
+            # B*T
+            greedy_mt_prediction_sample = greedy_mt_prediction_sample.view(-1)
+            greedy_mt_prediction_sample = greedy_mt_prediction_sample.index_select(dim=0, index=non_pad_indices)
+        
+        del non_pad_indices
 
         if num_saved_tokens + ntokens > cfg.task.knn_config.datastore_size:
             effective_ntokens = cfg.task.knn_config.datastore_size - num_saved_tokens
@@ -470,6 +511,10 @@ def main(cfg: DictConfig):
         if generate_datastore_4_gram_values_probs:
             target_4_gram_probs = target_4_gram_probs.cpu().numpy().astype(np.float32)
             datastore_4_gram_values_probs[num_saved_tokens: num_saved_tokens + effective_ntokens] = target_4_gram_probs
+        
+        if generate_greedy_mt_prediction:
+            greedy_mt_prediction_sample = greedy_mt_prediction_sample.cpu().numpy().astype(np.int64)
+            greedy_mt_prediction[num_saved_tokens: num_saved_tokens + effective_ntokens] = greedy_mt_prediction_sample
     
         num_saved_tokens += effective_ntokens
 
@@ -490,6 +535,9 @@ def main(cfg: DictConfig):
     
     if datastore_4_gram_values_probs is not None:
         datastore_4_gram_values_probs.flush()
+    
+    if greedy_mt_prediction is not None:
+        greedy_mt_prediction.flush()
 
     logger.info(
         "{:,} tokens in {:.1f}s, {:.2f} tokens/s)".format(

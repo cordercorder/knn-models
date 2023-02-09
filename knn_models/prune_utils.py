@@ -1,4 +1,5 @@
 import os
+import math
 import faiss
 import logging
 import numpy as np
@@ -486,3 +487,206 @@ def cluster_based_pruning(
     pruned_datastore_values[:] = datastore_values[remain_idx]
     pruned_datastore_values.flush()
     logger.info("Cluster based pruning complete")
+
+
+def get_plac_pruning_candicate(
+    datastore,
+    datastore_size,
+    keys_dimension,
+    keys_dtype,
+    use_gpu,
+    batch_size,
+    knowledge_margin,
+    nprobe,
+    knn_fp16,
+    log_interval,
+):
+    datastore_keys_path = os.path.join(datastore, "keys.npy")
+    keys_dtype = np.float32 if keys_dtype == "fp32" else np.float16
+    datastore_keys = np.memmap(
+        datastore_keys_path, 
+        dtype=keys_dtype, 
+        mode="r", 
+        shape=(datastore_size, keys_dimension)
+    )
+
+    # retrieve `knowledge_margin + 1` neighbors as the item itself 
+    # may exist in the retrieval results in the case of approximate
+    # k-nearest neighbor search
+    save_datastore_knn(
+        datastore_keys,
+        os.path.join(datastore, "faiss.index"),
+        use_gpu,
+        knn_fp16,
+        nprobe,
+        knowledge_margin + 1,
+        batch_size,
+        False,
+        log_interval
+    )
+
+    datastore_knn_idx_path = os.path.join(datastore, "datastore_knn_idx.npy")
+    datastore_knn_idx = np.memmap(
+        datastore_knn_idx_path,
+        dtype=np.int64,
+        mode="r",
+        shape=(datastore_size, knowledge_margin + 1)
+    )
+
+    datastore_values_path = os.path.join(datastore, "values.npy")
+    datastore_values = np.memmap(
+        datastore_values_path,
+        dtype=np.int64,
+        mode="r",
+        shape=(datastore_size, )
+    )
+
+    greedy_mt_prediction_path = os.path.join(datastore, "greedy_mt_prediction.npy")
+    greedy_mt_prediction = np.memmap(
+        greedy_mt_prediction_path,
+        dtype=np.int64,
+        mode="r",
+        shape=(datastore_size, )
+    )
+
+    current_idx = 0
+    num_batches = datastore_keys.shape[0] // batch_size + int(datastore_keys.shape[0] % batch_size != 0)
+
+    # there are indices of the pruning candicate in this variable
+    pruning_candicate = []
+
+    for batch_id in range(num_batches):
+        start_idx = current_idx
+        end_idx = min(start_idx + batch_size, datastore_keys.shape[0])
+        
+        # [B, K + 1]
+        batch_knn_idx = datastore_knn_idx[start_idx: end_idx]
+
+        # [B, ]
+        batch_values = datastore_values[start_idx: end_idx]
+
+        # skip the item itself in the neighbor
+        # the item itself may not rank first in the case of approximate k-nearest neighbor search
+        # [B, K + 1]
+        neighbor_to_remove = np.expand_dims(batch_values, axis=1) == batch_knn_idx
+        del batch_values
+
+        # [K + 1]
+        pseudo_distance = np.arange(0, knowledge_margin + 1, dtype=np.float32)
+        # [1, K + 1]
+        pseudo_distance = np.expand_dims(pseudo_distance, axis=0)
+        # [B, K + 1]
+        pseudo_distance = np.repeat(pseudo_distance, end_idx - start_idx, axis=0)
+
+        # mask the item itself with float("inf")
+        pseudo_distance = np.where(neighbor_to_remove, float("inf"), pseudo_distance)
+        sorted_indices = np.argsort(pseudo_distance, axis=1)
+        del pseudo_distance
+
+        batch_knn_idx = np.take_along_axis(batch_knn_idx, sorted_indices, axis=1)
+
+        # [B, K]
+        batch_knn_idx = batch_knn_idx[:, :knowledge_margin]
+
+        batch_neighbor_greedy_mt_prediction = greedy_mt_prediction[batch_knn_idx]
+        batch_neighbor_values = datastore_values[batch_knn_idx]
+
+        # [B, ]
+        is_pruning_candicate = (batch_neighbor_values == batch_neighbor_greedy_mt_prediction).all(axis=1)
+        del batch_neighbor_values, batch_neighbor_greedy_mt_prediction
+
+        batch_indices = np.arange(start_idx, end_idx, dtype=np.int64)
+        batch_pruning_candicate = batch_indices[is_pruning_candicate]
+        del batch_indices, is_pruning_candicate
+
+        pruning_candicate.append(batch_pruning_candicate)
+        del batch_pruning_candicate
+    
+        if (batch_id + 1) % log_interval == 0:
+            logger.info(f"{batch_id + 1} / {num_batches} batches have been processed!")
+        
+        current_idx = end_idx
+    
+    pruning_candicate = np.concatenate(pruning_candicate, axis=0)
+    logger.info(f"{pruning_candicate.shape[0]} pruning candicate in total")
+
+    pruning_candicate_path = os.path.join(datastore, "pruning_candicate.npy")
+    logger.info(f"Saving plac pruning cadidate to {pruning_candicate_path}")
+    np.save(pruning_candicate_path, pruning_candicate, allow_pickle=False)
+    logger.info(f"Saving plac pruning cadidate complete")
+
+
+def apply_plac_pruning(
+    datastore,
+    datastore_size,
+    keys_dimension,
+    keys_dtype,
+    pruned_datastore,
+    pruning_rate,
+    seed,
+):
+    pruning_candicate_path = os.path.join(datastore, "pruning_candicate.npy")
+    pruning_candicate = np.load(pruning_candicate_path)
+
+    max_pruning_rate = pruning_candicate.shape[0] / datastore_size
+
+    if pruning_rate > max_pruning_rate:
+        logger.warning(f"The specified pruning rate is too large, it will be cliped to {max_pruning_rate}")
+        pruning_rate = max_pruning_rate
+    
+    num_removed = math.floor(datastore_size * pruning_rate)
+
+    rng = np.random.default_rng(seed)
+    sampled_candicate = rng.choice(pruning_candicate, size=num_removed, replace=False)
+    del pruning_candicate
+
+    masked_array = np.full([datastore_size, ], fill_value=True, dtype=np.bool8)
+    masked_array[sampled_candicate] = False
+    del sampled_candicate
+
+    datastore_keys_path = os.path.join(datastore, "keys.npy")
+    keys_dtype = np.float32 if keys_dtype == "fp32" else np.float16
+    datastore_keys = np.memmap(
+        datastore_keys_path, 
+        dtype=keys_dtype, 
+        mode="r", 
+        shape=(datastore_size, keys_dimension)
+    )
+
+    pruned_datastore_size = datastore_size - num_removed
+    print(f"Pruned datastore size: {pruned_datastore_size}")
+
+    pruned_datastore_keys_path = os.path.join(pruned_datastore, "keys.npy")
+    logger.info(f"Saving pruned datastore keys to {pruned_datastore_keys_path}")
+
+    pruned_datastore_keys = np.memmap(
+        pruned_datastore_keys_path,
+        dtype=keys_dtype, 
+        mode="w+",
+        shape=(pruned_datastore_size, keys_dimension)
+    )
+    pruned_datastore_keys[:] = datastore_keys[masked_array]
+    pruned_datastore_keys.flush()
+    del pruned_datastore_keys, datastore_keys
+
+    datastore_values_path = os.path.join(datastore, "values.npy")
+    datastore_values = np.memmap(
+        datastore_values_path,
+        dtype=np.int64,
+        mode="r",
+        shape=(datastore_size, )
+    )
+
+    pruned_datastore_values_path = os.path.join(pruned_datastore, "values.npy")
+    logger.info(f"Saving pruned datastore values to {pruned_datastore_values_path}")
+
+    pruned_datastore_values = np.memmap(
+        pruned_datastore_values_path,
+        dtype=np.int64,
+        mode="w+",
+        shape=(pruned_datastore_size, )
+    )
+    pruned_datastore_values[:] = datastore_values[masked_array]
+    pruned_datastore_values.flush()
+
+    logger.info("Applying plac pruning complete")
