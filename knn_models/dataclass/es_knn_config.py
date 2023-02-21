@@ -40,6 +40,13 @@ class BaseEsKnnConfig(FairseqDataclass):
             "used for constructing the tiny datastore)"
         }
     )
+    batch_first: bool = field(
+        default=False,
+        metadata={
+            "help": "whether the batch dimension of the output produced by the "
+            "captured module is the first dimension"
+        }
+    )
 
 
 @dataclass

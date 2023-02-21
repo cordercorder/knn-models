@@ -50,9 +50,11 @@ class LanguageModelingKnnTask(LanguageModelingTask):
                 "Recomputing distance needs to load the datastore keys. `--load-keys` must be set."
 
         if args.dim_reduce_config.dim_reduce_method is None:
-            self.forward_hook = ForwardHook()
+            self.forward_hook = ForwardHook(args.knn_config.batch_first)
         else:
-            self.forward_hook = DimReduceForwardHook(args.dim_reduce_config)
+            self.forward_hook = DimReduceForwardHook(
+                args.dim_reduce_config, args.knn_config.batch_first
+            )
 
     def build_model(self, cfg: FairseqDataclass, from_checkpoint=False):
         model = super().build_model(cfg, from_checkpoint)

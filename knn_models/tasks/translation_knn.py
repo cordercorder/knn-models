@@ -36,9 +36,11 @@ class TranslationKnnTask(TranslationTask):
         self.knn_search = KnnSearch(cfg.knn_config)
 
         if cfg.dim_reduce_config.dim_reduce_method is None:
-            self.forward_hook = ForwardHook()
+            self.forward_hook = ForwardHook(cfg.knn_config.batch_first)
         else:
-            self.forward_hook = DimReduceForwardHook(cfg.dim_reduce_config)
+            self.forward_hook = DimReduceForwardHook(
+                cfg.dim_reduce_config, cfg.knn_config.batch_first
+            )
 
     def build_model(self, cfg: FairseqDataclass, from_checkpoint=False):
         model = super().build_model(cfg, from_checkpoint)

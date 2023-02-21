@@ -175,19 +175,12 @@ def main(cfg: DictConfig):
         else:
             keys_dtype = np.float32
         
-        # infer keys dimension from the saved config
-        try:
-            keys_dimension = saved_cfg.model.decoder.embed_dim
-        except AttributeError:
-            # legacy model config
-            keys_dimension = saved_cfg.model.decoder_embed_dim
-        
         logger.info(f"Saving datastore keys in {datastore_keys_path}")
         datastore_keys = np.memmap(
             datastore_keys_path, 
             dtype=keys_dtype, 
             mode="w+", 
-            shape=(cfg.task.knn_config.datastore_size, keys_dimension)
+            shape=(cfg.task.knn_config.datastore_size, cfg.task.knn_config.keys_dimension)
         )
     else:
         datastore_keys = None

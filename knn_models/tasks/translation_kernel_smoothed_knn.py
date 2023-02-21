@@ -39,7 +39,7 @@ class TranslationKernelSmoothedKnnTask(TranslationTask):
     def __init__(self, cfg: TranslationKernelSmoothedKnnConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
         self.knn_search = KernelSmoothedKnnSearch(cfg.knn_config)
-        self.forward_hook = ForwardHook()
+        self.forward_hook = ForwardHook(cfg.knn_config.batch_first)
 
     def build_model(self, cfg, from_checkpoint=False):
         model = super().build_model(cfg, from_checkpoint)

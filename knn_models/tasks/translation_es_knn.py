@@ -42,7 +42,7 @@ class TranslationEsKnnTask(TranslationTask):
     def __init__(self, cfg: TranslationEsKnnConfig, src_dict, tgt_dict):
         super().__init__(cfg, src_dict, tgt_dict)
         self.es_knn_search = ElasticKnnSearch(cfg.es_knn_config)
-        self.forward_hook = ForwardHook()
+        self.forward_hook = ForwardHook(cfg.es_knn_config.batch_first)
 
         self.datastore_keys = None
         self.datastore_keys_norm = None

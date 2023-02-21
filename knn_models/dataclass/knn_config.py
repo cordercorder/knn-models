@@ -83,6 +83,13 @@ class BaseKnnConfig(FairseqDataclass):
             "the default module is the last layer of decoder"
         }
     )
+    batch_first: bool = field(
+        default=False,
+        metadata={
+            "help": "whether the batch dimension of the output produced by the "
+            "captured module is the first dimension"
+        }
+    )
     saving_mode: bool = field(
         default=False,
         metadata={
