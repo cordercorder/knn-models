@@ -58,6 +58,7 @@ fairseq-preprocess \
     --destdir ${data_bin}
 ```
 
+
 ## Generate the datastore
 Generate the datastore with the pre-trained NMT model. Note that we set the environment variable 
 `PCKMT_DATASTORE` in the script below to generate n-gram phrases and their corresponding probabilities, 
@@ -172,6 +173,7 @@ you can skip it and move to the next step.
 ``` bash
 domain="it"
 
+data_bin=/path/to/multi-domin-data-bin/${domain}
 transformed_datastore=/path/to/transformed-datastore/${domain}
 datastore_size=`count_tokens -d ${data_bin}/train.de-en.en`
 reduced_keys_dimension=64
@@ -191,7 +193,7 @@ prune_datastore \
 
 
 ## Build the Faiss index
-The script below will construct `IndexIVFPQ` with Faiss and save it 
+The script below will construct the `IndexIVFPQ` index with Faiss and save it 
 as a file named `faiss.index` to the `pruned_datastore` directory.
 
 ``` bash

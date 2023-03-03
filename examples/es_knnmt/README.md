@@ -14,6 +14,36 @@ This page includes instructions on how to use SK-MT with kNN-models, taking the 
 [multi-domain parallel data](https://github.com/roeeaharoni/unsupervised-domain-clusters) as an example. 
 
 
+**Please note that the implementation in kNN-models is slightly different from the [official code](https://github.com/dirkiedai/sk-mt). 
+Suppose that d_0 is the minimum squared distance during the nearest neighbor search, the [official code](https://github.com/dirkiedai/sk-mt) 
+computes lambda according to the following equation:**
+``` bash
+lambda = ReLU(1 - d_0 / temperature)
+```
+**In contrast, the lambda in kNN-models is obtained by the equation below:**
+``` bash
+lambda = ReLU(1 - sqrt(d_0) / temperature)
+```
+**We make this modification as we find that replacing d_0 with the euclidean distance can achieve better performance 
+than the squared distance counterpart without re-ranking and re-ranking even deteriorate the performance slightly 
+during our preliminary experiments. The table below shows the experiment results and corresponding hyper-parameters 
+of SK-MT implementation in kNN-models without re-ranking with the pre-trained German-English NMT model of 
+[(Ng et al., 2019)](https://aclanthology.org/W19-5333.pdf) on the 
+[multi-domain parallel corpus](https://github.com/roeeaharoni/unsupervised-domain-clusters):**
+
+| | Medical | Law | IT | Koran | Subtitles | Subtitles.full |
+| :----: | :----: | :----: | :----: | :----: | :----: | :----: |
+| size  | 16 | 16 | 16 | 16 | 16 | 16 |
+| num_neighbors | 4 | 8 | 8 | 16 | 16 | 16 |
+| temperature_value | 20 | 20 | 20 | 50 | 5 | 10 |
+| BLEU | 58.78 | 63.52 | 48.27 | 20.78 | 29.66 | 30.2 |
+
+
+**Alternatively, you can replace `lambda_value = F.relu(1.0 - distance[:, :, 0].sqrt().div_(temperature_value))` in 
+[es_knn_utils.py](../../knn_models/es_knn_utils.py) with `lambda_value = F.relu(1.0 - distance[:, :, 0].div_(temperature_value))` 
+to keep the implementation in kNN-models the same as the official.**
+
+
 ## Download the pre-trained model
 Download the pre-trained German-English NMT model of 
 [(Ng et al., 2019)](https://aclanthology.org/W19-5333.pdf):

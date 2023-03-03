@@ -84,9 +84,9 @@ generate_lm_datastore ${wikitext_data_bin} \
 
 Due to the memory constraint (a server with 256 GB RAM), we only randomly 
 sample 40000000 keys to train the Faiss index. The number of sampled keys
-can be adjusted according to the hardware environment. This step will 
-construct `IndexIVFPQ` with Faiss and save it as a file named `faiss.index` 
-to the `datastore` directory.
+can be adjusted according to your hardware environment. This step will 
+construct the `IndexIVFPQ` index with Faiss and save it as a file named 
+`faiss.index` to the `datastore` directory.
 
 ``` bash
 datastore=/path/to/datastore

@@ -571,7 +571,7 @@ The observed maximum GPU memory consumption of kNN-models during inference is pr
 
 ### I can't find the model implementation in kNN-models
 Most studies of retrieval argumented sequence modeling implemented in kNN-models mainly rely on two procedures to work: 
-(1) saving the intermediate hidden states of the model during forward pass, (2) retrieving useful information from a datastore 
+(1) saving the intermediate hidden states of the model during the forward pass, (2) retrieving useful information from a datastore 
 according to the saved intermediate hidden states to improve the probability distribution over tokens. **For the first procedure, 
 we register a [forward hook](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.register_forward_hook) 
 on the model to collect the intermediate hidden states, which is implemented in the `build_model` function (please refer 

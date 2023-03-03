@@ -80,7 +80,7 @@ generate_mt_datastore ${data_bin} \
 ```
 
 ## Build the Faiss index
-The script below will construct `IndexIVFPQ` with Faiss and save it 
+The script below will construct the `IndexIVFPQ` index with Faiss and save it 
 as a file named `faiss.index` to the `datastore` directory.
 ``` bash
 domain="it"
