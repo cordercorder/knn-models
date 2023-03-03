@@ -6,7 +6,7 @@
 The paper [What Knowledge Is Needed? Towards Explainable Memory for kNN-MT Domain Adaptation](https://arxiv.org/abs/2211.04052) 
 introduces PLAC (<u>P</u>runing with <u>L</u>oc<u>A</u>l <u>C</u>orrectness) to prune the datastore while retaining the translation performance of kNN-MT as much as possible. PLAC is built on a criterion named knowledge margin, which is used to measure the 
 correctness of NMT model prediction. For PLAC, the entries in the datastore whose knowledge margin is higher than a manually 
-defined threshold are considered pruning candidates. 
+defined threshold are considered as pruning candidates. 
 
 
 We provide instructions on how to use PLAC with kNN-models to prune datastore on this page, taking the IT domain corpus from 
@@ -110,6 +110,8 @@ build_faiss_index \
 
 
 ## Prune the datastore with PLAC
+The script below will prune the datastore with PLAC. Please note the size of the pruned datastore 
+will print to the terminal during `apply_plac_pruning` stage.
 ``` bash
 domain="it"
 data_bin=/path/to/multi-domin-data-bin/${domain}
@@ -123,6 +125,7 @@ pruning_rate="please fill in the pruning_rate here"
 
 mkdir -p ${pruned_datastore}
 
+# get_plac_pruning_candicate stage
 prune_datastore \
     --method plac_pruning \
     --plac-stage get_plac_pruning_candicate \
@@ -131,10 +134,11 @@ prune_datastore \
     --keys-dimension 1024 \
     --pruned-datastore ${pruned_datastore} \
     --use-gpu \
-    --knowledge-margin 4 \
+    --knowledge-margin ${knowledge_margin} \
     --knn-fp16
 
 
+# apply_plac_pruning stage
 prune_datastore \
     --method plac_pruning \
     --plac-stage apply_plac_pruning \
@@ -163,7 +167,7 @@ build_faiss_index \
 
 
 ## Train meta-k network
-Train meta-k network with the validation set:
+Train meta-k network on the validation set:
 ``` bash
 domain="it"
 

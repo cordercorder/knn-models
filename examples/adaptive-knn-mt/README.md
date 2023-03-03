@@ -106,7 +106,7 @@ build_faiss_index \
 ```
 
 ## Train meta-k network
-Train meta-k network with the validation set:
+Train meta-k network on the validation set:
 ``` bash
 domain="it"
 

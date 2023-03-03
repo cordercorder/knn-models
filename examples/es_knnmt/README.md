@@ -97,8 +97,8 @@ Add the training set to ElasticSearch to make it searchable.
 ``` bash
 domain="it"
 preprocessed_multi_domin_corpus=/path/to/preprocessed-multi-domin-corpus/${domain}
-elastic_password="please fill the password of the elastic user here"
-index_name="please fill the name of index here"
+elastic_password="please fill in the password of the elastic user here"
+index_name="please fill in the name of index here"
 
 es_knn_manager \
     --hosts https://localhost:9200 \
@@ -129,8 +129,8 @@ knn_models=/path/to/knn_models
 multi_domin_corpus=/path/to/multi-domin-corpus
 data_bin=/path/to/multi-domin-data-bin/${domain}
 checkpoint=/path/to/pretrained_model/wmt19.de-en.ffn8192.pt
-elastic_password="please fill the password of the elastic user here"
-index_name="please fill the name of index here"
+elastic_password="please fill in the password of the elastic user here"
+index_name="please fill in the name of index here"
 
 max_tokens=8000
 
@@ -180,8 +180,8 @@ knn_models=/path/to/knn_models
 multi_domin_corpus=/path/to/multi-domin-corpus
 data_bin=/path/to/multi-domin-data-bin/${domain}
 checkpoint=/path/to/pretrained_model/wmt19.de-en.ffn8192.pt
-elastic_password="please fill the password of the elastic user here"
-index_name="please fill the name of index here"
+elastic_password="please fill in the password of the elastic user here"
+index_name="please fill in the name of index here"
 
 max_tokens=8000
 
